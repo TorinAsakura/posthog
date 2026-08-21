@@ -710,6 +710,12 @@ def _get_modal_evals_sandbox_class() -> SandboxClass:
     return ModalEvalsSandbox
 
 
+def _get_hogland_sandbox_class() -> SandboxClass:
+    from .hogland_sandbox import HoglandSandbox
+
+    return HoglandSandbox
+
+
 def get_sandbox_class() -> SandboxClass:
     provider = getattr(settings, "SANDBOX_PROVIDER", None)
 
@@ -721,6 +727,16 @@ def get_sandbox_class() -> SandboxClass:
 
     if provider and provider.upper() == "MODAL_EVALS":
         return _get_modal_evals_sandbox_class()
+
+    if provider and provider.lower() == "hogland":
+        # Global default only for local development — production routes per run via
+        # get_sandbox_class_for_backend, driven by the tasks-hogland-sandbox flag.
+        if not (settings.DEBUG or settings.TEST):
+            raise RuntimeError(
+                "SANDBOX_PROVIDER=hogland is for local development only. In production the "
+                "hogland backend is selected per run by the tasks-hogland-sandbox feature flag."
+            )
+        return _get_hogland_sandbox_class()
 
     # Default to Modal everywhere
     from .modal_sandbox import ModalSandbox
@@ -739,7 +755,26 @@ def get_sandbox_class_for_backend(backend: str) -> SandboxClass:
         return _get_modal_evals_sandbox_class()
     if backend == "docker":
         return _get_docker_sandbox_class()
+    if backend == "hogland":
+        return _get_hogland_sandbox_class()
     raise RuntimeError(f"Unsupported sandbox backend: {backend}")
+
+
+HOGLAND_SANDBOX_ID_PREFIX = "hb-"
+
+
+def get_sandbox_class_for_sandbox_id(sandbox_id: str) -> SandboxClass:
+    """Resolve the provider class for an existing sandbox from its id alone.
+
+    Hogland box ids are `hb-...` and Modal object ids `sb-...`, so the prefix is enough
+    to route the ~20 `get_by_id` call sites that hold only a persisted sandbox id (the
+    reaper, cleanup, and snapshot activities have no other backend context). Anything
+    that is not a hogland id falls through to the process-wide provider, preserving the
+    docker/local-dev behavior.
+    """
+    if sandbox_id.startswith(HOGLAND_SANDBOX_ID_PREFIX):
+        return _get_hogland_sandbox_class()
+    return get_sandbox_class()
 
 
 if TYPE_CHECKING:
