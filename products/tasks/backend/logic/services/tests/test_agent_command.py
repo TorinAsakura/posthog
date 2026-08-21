@@ -10,6 +10,7 @@ from products.tasks.backend.logic.services.agent_command import (
     REFRESH_TIMEOUT_SECONDS,
     CommandResult,
     _build_request_args,
+    sandbox_transport_token,
     send_agent_command,
     send_cancel,
     send_refresh_session,
@@ -445,3 +446,50 @@ class TestSendRefreshSession:
         )
         assert result.success
         assert REFRESH_SESSION_METHOD == "_posthog/refresh_session"
+
+
+class TestSandboxTransportToken:
+    @override_settings(HOGLAND_API_TOKEN="hog-tok")
+    def test_hogland_runs_use_the_backend_bearer_as_a_query_param(self):
+        token, param = sandbox_transport_token({"sandbox_backend": "hogland", "sandbox_connect_token": "stale"})
+        assert (token, param) == ("hog-tok", "token")
+
+    def test_hogland_runs_read_the_rotating_token_file_fresh_per_request(self, tmp_path):
+        token_path = tmp_path / "token"
+        token_path.write_text("rotated-1\n")
+        state = {"sandbox_backend": "hogland"}
+        with override_settings(HOGLAND_API_TOKEN="static-tok", HOGLAND_API_TOKEN_FILE=str(token_path)):
+            first = sandbox_transport_token(state)
+            token_path.write_text("rotated-2\n")
+            second = sandbox_transport_token(state)
+        assert first == ("rotated-1", "token")
+        assert second == ("rotated-2", "token")
+
+    @pytest.mark.parametrize(
+        "state",
+        [
+            None,
+            {},
+            {"sandbox_connect_token": "modal-tok"},
+            {"sandbox_backend": "modal", "sandbox_connect_token": "modal-tok"},
+        ],
+        ids=["no_state", "empty_state", "implicit_modal", "explicit_modal"],
+    )
+    def test_modal_runs_keep_the_persisted_connect_token(self, state):
+        token, param = sandbox_transport_token(state)
+        assert param == "_modal_connect_token"
+        assert token == (state or {}).get("sandbox_connect_token")
+
+
+class TestBuildRequestArgsHoglandParam:
+    def test_jwt_plus_hogland_token_travels_in_the_token_query_param(self):
+        headers, query_params = _build_request_args("hog-tok", "jwt-tok", token_param="token")
+        assert headers["Authorization"] == "Bearer jwt-tok"
+        assert query_params == {"token": "hog-tok"}
+
+    def test_hogland_token_never_lands_in_the_authorization_header_without_a_jwt(self):
+        # The hogland proxy strips an Authorization header it consumed, so a
+        # header-borne token would leave the agent-server no auth context at all.
+        headers, query_params = _build_request_args("hog-tok", None, token_param="token")
+        assert "Authorization" not in headers
+        assert query_params == {"token": "hog-tok"}

@@ -4144,11 +4144,17 @@ def get_task_run_sandbox_connection(
     if not run_state.sandbox_url:
         return contracts.TaskRunSandboxConnectionDTO(sandbox_url=None, sandbox_connect_token=None)
 
+    from products.tasks.backend.logic.services.agent_command import (  # noqa: PLC0415 — keep sandbox deps off the api import path
+        sandbox_transport_token,
+    )
+
     connection_token = _create(task_run=run, user_id=user_id, distinct_id=distinct_id)
+    transport_token, token_param = sandbox_transport_token(run.state)
     return contracts.TaskRunSandboxConnectionDTO(
         sandbox_url=run_state.sandbox_url,
-        sandbox_connect_token=run_state.sandbox_connect_token,
+        sandbox_connect_token=transport_token,
         connection_token=connection_token,
+        sandbox_token_param=token_param,
     )
 
 

@@ -2189,7 +2189,7 @@ class TaskRun(models.Model):
             if state.get("sandbox_id") != sandbox_id:
                 return
 
-            for key in ("sandbox_id", "sandbox_url", "sandbox_connect_token", "sandbox_jwt_kid"):
+            for key in ("sandbox_id", "sandbox_url", "sandbox_connect_token", "sandbox_jwt_kid", "sandbox_backend"):
                 state.pop(key, None)
 
         return cls.mutate_state_atomic(run_id, _mutator)
@@ -3156,6 +3156,9 @@ class SandboxSnapshot(UUIDModel):
 
             if os.environ.get("MODAL_TOKEN_ID") and os.environ.get("MODAL_TOKEN_SECRET") and not settings.TEST:
                 try:
+                    # Modal-only: hogland runs never create SandboxSnapshot rows today. When
+                    # hogland resume snapshots land, this needs a backend branch keyed on the
+                    # snapshot's provider rather than the MODAL_TOKEN_* env gate above.
                     Sandbox.delete_snapshot(self.external_id)
                 except Exception as e:
                     raise Exception(

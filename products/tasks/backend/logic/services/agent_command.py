@@ -104,15 +104,37 @@ def _get_sandbox_url_and_token(task_run: Any) -> tuple[str | None, str | None]:
     return state.get("sandbox_url"), state.get("sandbox_connect_token")
 
 
+def sandbox_transport_token(state: dict[str, Any] | None) -> tuple[str | None, str]:
+    """(token, query_param_name) for the sandbox tunnel/proxy layer.
+
+    Modal mints a per-sandbox connect token that is persisted in ``TaskRun.state``.
+    Hogland has no per-sandbox token: its proxy authenticates with the backend's
+    bearer — a rotating projected ServiceAccount JWT read fresh per request (the
+    static token is the local-dev fallback) — attached here at request time so it
+    never touches persisted state or Temporal payloads.
+    """
+    if (state or {}).get("sandbox_backend") == "hogland":
+        # Deferred: hogland_sandbox pulls in the hogland SDK + httpx, which every
+        # non-hogland caller of this module would otherwise pay for.
+        from products.tasks.backend.logic.services.hogland_sandbox import get_hogland_api_token  # noqa: PLC0415
+
+        return get_hogland_api_token(), "token"
+    return (state or {}).get("sandbox_connect_token"), "_modal_connect_token"
+
+
 def _build_request_args(
     connect_token: str | None,
     auth_token: str | None,
+    token_param: str = "_modal_connect_token",
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Build request headers and query params with appropriate auth scheme.
 
-    When auth_token is provided (external callers going through Modal tunnel):
-    JWT goes as Authorization header, Modal connect token as query param.
-    Otherwise (internal callers on same network): connect_token as Authorization header.
+    When auth_token is provided (callers going through the provider tunnel/proxy):
+    JWT goes as Authorization header, the transport token as the provider's query
+    param. Otherwise (internal callers on same network): a Modal connect token goes
+    in the Authorization header, while hogland's bearer stays a query param — its
+    proxy strips an Authorization header it consumed, and only header-free requests
+    reach the agent-server unauthenticated the way Modal's do.
 
     Returns:
         Tuple of (headers, query_params).
@@ -122,9 +144,12 @@ def _build_request_args(
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}"
         if connect_token:
-            query_params["_modal_connect_token"] = connect_token
+            query_params[token_param] = connect_token
     elif connect_token:
-        headers["Authorization"] = f"Bearer {connect_token}"
+        if token_param == "_modal_connect_token":
+            headers["Authorization"] = f"Bearer {connect_token}"
+        else:
+            query_params[token_param] = connect_token
     return headers, query_params
 
 
@@ -145,7 +170,8 @@ def send_agent_command(
             as ``_modal_connect_token`` query param for Modal tunnel auth.
             When omitted, connect_token is used directly as Authorization.
     """
-    sandbox_url, connect_token = _get_sandbox_url_and_token(task_run)
+    sandbox_url, _ = _get_sandbox_url_and_token(task_run)
+    connect_token, token_param = sandbox_transport_token(task_run.state)
     if not sandbox_url:
         return CommandResult(
             success=False,
@@ -169,7 +195,7 @@ def send_agent_command(
             retryable=False,
         )
 
-    headers, query_params = _build_request_args(connect_token, auth_token)
+    headers, query_params = _build_request_args(connect_token, auth_token, token_param)
     command_url = f"{sandbox_url.rstrip('/')}/command"
 
     payload: dict[str, Any] = {
