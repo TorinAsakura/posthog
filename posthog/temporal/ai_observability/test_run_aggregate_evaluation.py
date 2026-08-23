@@ -32,9 +32,6 @@ from posthog.temporal.ai_observability.run_trace_evaluation import (
     ExecuteTraceEvaluationInputs,
 )
 
-# Largest value the Int16 `retention_days` column takes, so a fixture row outlives any run.
-_FIXTURE_RETENTION_DAYS = 32767
-
 
 @pytest.fixture
 def setup_data():
@@ -62,21 +59,15 @@ def _insert_ai_event(
     `_timestamp` from the same `timestamp` value it inserts, so tests that need to simulate
     ingestion lag write directly against the columns AI_EVENTS_TABLE_BASE_SQL leaves without
     a default.
-
-    `retention_days` is pinned rather than left on its 30-day default because the callers freeze
-    the clock at a fixed date. `sharded_ai_events` drops a partition once `toDate(timestamp) +
-    retention_days` is past, and ClickHouse judges that on its own unfrozen clock — on the default
-    the rows would silently vanish 30 days after the frozen date, taking every settle-poll test
-    with them.
     """
     sync_execute(
         """
         INSERT INTO sharded_ai_events (
-            uuid, event, timestamp, team_id, distinct_id, person_id, properties, retention_days,
+            uuid, event, timestamp, team_id, distinct_id, person_id, properties,
             trace_id, session_id, is_error, _timestamp, _offset, _partition
         ) VALUES (
             %(uuid)s, %(event)s, %(timestamp)s, %(team_id)s, %(distinct_id)s, %(person_id)s, %(properties)s,
-            %(retention_days)s, %(trace_id)s, %(session_id)s, 0, %(_timestamp)s, 0, 0
+            %(trace_id)s, %(session_id)s, 0, %(_timestamp)s, 0, 0
         )
         """,
         {
@@ -84,7 +75,6 @@ def _insert_ai_event(
             "event": event,
             "timestamp": (event_timestamp or datetime.now(UTC)).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "team_id": team.id,
-            "retention_days": _FIXTURE_RETENTION_DAYS,
             "distinct_id": "test-user",
             "person_id": str(uuid.uuid4()),
             "properties": "{}",
