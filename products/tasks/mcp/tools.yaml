@@ -309,6 +309,9 @@ tools:
     task-channels-partial-update:
         operation: task_channels_partial_update
         enabled: false
+    task-channels-provision-defaults-create:
+        operation: task_channels_provision_defaults_create
+        enabled: false
     task-channels-star-create:
         operation: task_channels_star_create
         enabled: false
@@ -370,6 +373,9 @@ tools:
                 - updated_at
     tasks-destroy:
         operation: tasks_destroy
+        enabled: false
+    tasks-handoff-create:
+        operation: tasks_handoff_create
         enabled: false
     tasks-list:
         operation: tasks_list
@@ -453,6 +459,12 @@ tools:
     tasks-run-create:
         operation: tasks_run_create
         enabled: false
+    tasks-runs-analysis-insight-create:
+        operation: tasks_runs_analysis_insight_create
+        enabled: false
+    tasks-runs-analyze-create:
+        operation: tasks_runs_analyze_create
+        enabled: false
     tasks-runs-append-log-create:
         operation: tasks_runs_append_log_create
         enabled: false
@@ -479,6 +491,9 @@ tools:
         enabled: false
     tasks-runs-artifacts-presign-create:
         operation: tasks_runs_artifacts_presign_create
+        enabled: false
+    tasks-runs-artifacts-references-create:
+        operation: tasks_runs_artifacts_references_create
         enabled: false
     tasks-runs-cancel-create:
         operation: tasks_runs_cancel_create
@@ -540,6 +555,12 @@ tools:
         enabled: false
     tasks-runs-partial-update:
         operation: tasks_runs_partial_update
+        enabled: false
+    tasks-runs-peers-message-create:
+        operation: tasks_runs_peers_message_create
+        enabled: false
+    tasks-runs-peers-retrieve:
+        operation: tasks_runs_peers_retrieve
         enabled: false
     tasks-runs-relay-message-create:
         operation: tasks_runs_relay_message_create
