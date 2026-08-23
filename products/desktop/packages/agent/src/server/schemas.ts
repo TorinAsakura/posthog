@@ -26,6 +26,7 @@ const remoteMcpServerSchema: z.ZodType<McpServerConnection> = z.object({
   name: z.string().min(1, "MCP server name is required"),
   url: z.url({ error: "MCP server url must be a valid URL" }),
   headers: z.array(httpHeaderSchema).default([]),
+  description: z.string().optional(),
 });
 
 export const mcpServersSchema = z.array(remoteMcpServerSchema);
