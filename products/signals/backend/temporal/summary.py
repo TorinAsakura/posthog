@@ -126,6 +126,11 @@ class ReportDecision:
     summary: str
     choice: ActionabilityChoice
     explanation: str
+    # Structured presentation fields written beside title/summary (see
+    # RunAgenticReportOutput); `None` for the no-repo branch, which does no research.
+    headline: str | None = None
+    impact: str | None = None
+    recommended_action: str | None = None
     # Resolved chart payload to store with the title/summary (see `RunAgenticReportOutput.charts`):
     # a JSON set, `[]` to clear, or `None` to leave the column alone. `None` for the no-repo branch,
     # which does no research.
@@ -412,6 +417,9 @@ class SignalReportSummaryWorkflow:
                     summary=agentic_result.summary,
                     choice=agentic_result.choice,
                     explanation=agentic_result.explanation,
+                    headline=agentic_result.headline,
+                    impact=agentic_result.impact,
+                    recommended_action=agentic_result.recommended_action,
                     charts=agentic_result.charts,
                     pending_reason="agent_requested",
                 )
@@ -451,6 +459,9 @@ class SignalReportSummaryWorkflow:
                         source_products=source_products,
                         charts=decision.charts,
                         pending_reason=decision.pending_reason,
+                        headline=decision.headline,
+                        impact=decision.impact,
+                        recommended_action=decision.recommended_action,
                     ),
                     start_to_close_timeout=timedelta(minutes=1),
                     retry_policy=RetryPolicy(maximum_attempts=3),
@@ -469,6 +480,9 @@ class SignalReportSummaryWorkflow:
                     processed_signal_count=signal_count,
                     source_products=source_products,
                     charts=decision.charts,
+                    headline=decision.headline,
+                    impact=decision.impact,
+                    recommended_action=decision.recommended_action,
                 ),
                 start_to_close_timeout=timedelta(minutes=1),
                 retry_policy=RetryPolicy(maximum_attempts=3),
@@ -708,6 +722,10 @@ class MarkReportReadyInput:
     # `[]` to clear, or `None` to leave the column untouched. Defaults to `None` so an older workflow
     # history that predates this field replays cleanly.
     charts: list[dict[str, Any]] | None = None
+    # Structured presentation fields written beside title/summary; None-defaulted for replay safety.
+    headline: str | None = None
+    impact: str | None = None
+    recommended_action: str | None = None
 
 
 @temporalio.activity.defn
@@ -725,7 +743,14 @@ async def mark_report_ready_activity(input: MarkReportReadyInput) -> bool:
             if report.status == SignalReport.Status.CANDIDATE:
                 # Previous attempt took the re-promotion branch; preserve has_new_signals=True.
                 return True, report.run_count, True
-            updated_fields = report.transition_to(SignalReport.Status.READY, title=input.title, summary=input.summary)
+            updated_fields = report.transition_to(
+                SignalReport.Status.READY,
+                title=input.title,
+                summary=input.summary,
+                headline=input.headline,
+                impact=input.impact,
+                recommended_action=input.recommended_action,
+            )
             if input.charts is not None:
                 report.charts = input.charts
                 updated_fields = [*updated_fields, "charts"]
@@ -850,6 +875,10 @@ class MarkReportPendingInput:
     # Coarse cause of the transition ("repo_selection_required" / "agent_requested"), see
     # ReportDecision.pending_reason.
     pending_reason: str | None = None
+    # See MarkReportReadyInput — structured presentation fields, None-defaulted for replay safety.
+    headline: str | None = None
+    impact: str | None = None
+    recommended_action: str | None = None
 
 
 @temporalio.activity.defn
@@ -865,7 +894,13 @@ async def mark_report_pending_input_activity(input: MarkReportPendingInput) -> N
             if report.status == SignalReport.Status.PENDING_INPUT:
                 return report.run_count, True
             updated_fields = report.transition_to(
-                SignalReport.Status.PENDING_INPUT, title=input.title, summary=input.summary, error=input.reason
+                SignalReport.Status.PENDING_INPUT,
+                title=input.title,
+                summary=input.summary,
+                error=input.reason,
+                headline=input.headline,
+                impact=input.impact,
+                recommended_action=input.recommended_action,
             )
             if input.charts is not None:
                 report.charts = input.charts
