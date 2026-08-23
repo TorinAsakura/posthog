@@ -9,6 +9,7 @@ import temporalio
 import posthoganalytics
 from pydantic import BaseModel, ValidationError
 
+from posthog.dataclasses import frozen
 from posthog.models.team.team import Team
 from posthog.ph_client import feature_enabled_or_false
 from posthog.sync import database_sync_to_async
@@ -55,7 +56,7 @@ class RunAgenticReportInput:
     repo_selection: RepoSelectionResult
 
 
-@dataclass
+@frozen
 class RunAgenticReportOutput:
     title: str
     summary: str

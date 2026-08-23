@@ -120,7 +120,7 @@ def _capture_report_event(
         )
 
 
-@dataclass
+@frozen
 class ReportDecision:
     title: str
     summary: str
@@ -744,7 +744,7 @@ def _presentation_from_input(input: "MarkReportReadyInput | MarkReportPendingInp
     )
 
 
-@dataclass
+@frozen
 class MarkReportReadyInput:
     team_id: int
     report_id: str
@@ -898,7 +898,7 @@ async def mark_report_failed_activity(input: MarkReportFailedInput) -> None:
     )
 
 
-@dataclass
+@frozen
 class MarkReportPendingInput:
     team_id: int
     report_id: str
