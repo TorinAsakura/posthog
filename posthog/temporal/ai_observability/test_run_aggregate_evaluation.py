@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from freezegun import freeze_time
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -31,6 +32,9 @@ from posthog.temporal.ai_observability.run_trace_evaluation import (
     ExecuteTraceEvaluationInputs,
 )
 
+# Largest value the Int16 `retention_days` column takes, so a fixture row outlives any run.
+_FIXTURE_RETENTION_DAYS = 32767
+
 
 @pytest.fixture
 def setup_data():
@@ -58,15 +62,21 @@ def _insert_ai_event(
     `_timestamp` from the same `timestamp` value it inserts, so tests that need to simulate
     ingestion lag write directly against the columns AI_EVENTS_TABLE_BASE_SQL leaves without
     a default.
+
+    `retention_days` is pinned rather than left on its 30-day default because the callers freeze
+    the clock at a fixed date. `sharded_ai_events` drops a partition once `toDate(timestamp) +
+    retention_days` is past, and ClickHouse judges that on its own unfrozen clock — on the default
+    the rows would silently vanish 30 days after the frozen date, taking every settle-poll test
+    with them.
     """
     sync_execute(
         """
         INSERT INTO sharded_ai_events (
-            uuid, event, timestamp, team_id, distinct_id, person_id, properties,
+            uuid, event, timestamp, team_id, distinct_id, person_id, properties, retention_days,
             trace_id, session_id, is_error, _timestamp, _offset, _partition
         ) VALUES (
             %(uuid)s, %(event)s, %(timestamp)s, %(team_id)s, %(distinct_id)s, %(person_id)s, %(properties)s,
-            %(trace_id)s, %(session_id)s, 0, %(_timestamp)s, 0, 0
+            %(retention_days)s, %(trace_id)s, %(session_id)s, 0, %(_timestamp)s, 0, 0
         )
         """,
         {
@@ -74,6 +84,7 @@ def _insert_ai_event(
             "event": event,
             "timestamp": (event_timestamp or datetime.now(UTC)).strftime("%Y-%m-%d %H:%M:%S.%f"),
             "team_id": team.id,
+            "retention_days": _FIXTURE_RETENTION_DAYS,
             "distinct_id": "test-user",
             "person_id": str(uuid.uuid4()),
             "properties": "{}",
@@ -501,11 +512,7 @@ class TestRunAggregateEvaluationWorkflow:
         assert elapsed < timedelta(hours=1)
 
 
-# The settle-poll classes below write real rows to ClickHouse, so they run on the real clock.
-# `sharded_ai_events` drops whole partitions once `toDate(timestamp) + retention_days` (30 by
-# default) is in the past, and ClickHouse evaluates that against its own clock — a pinned date
-# would silently expire the inserted rows as soon as the wall clock moved past it. Every case
-# here places its events relative to `datetime.now(UTC)`, so no pinned clock is needed.
+@freeze_time("2026-07-23T12:00:00Z")
 class TestCheckTraceSettledActivity:
     @pytest.mark.django_db(transaction=True)
     def test_settled_when_quiet_beyond_margin(self, setup_data):
@@ -580,6 +587,7 @@ class TestCheckTraceSettledActivity:
         assert "trace active" in err.value.message
 
 
+@freeze_time("2026-07-23T12:00:00Z")
 class TestCheckSessionSettledActivity:
     @pytest.mark.django_db(transaction=True)
     def test_settled_when_quiet_beyond_margin(self, setup_data):
