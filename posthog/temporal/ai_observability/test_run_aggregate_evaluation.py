@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from freezegun import freeze_time
 
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -502,7 +501,11 @@ class TestRunAggregateEvaluationWorkflow:
         assert elapsed < timedelta(hours=1)
 
 
-@freeze_time("2026-07-23T12:00:00Z")
+# The settle-poll classes below write real rows to ClickHouse, so they run on the real clock.
+# `sharded_ai_events` drops whole partitions once `toDate(timestamp) + retention_days` (30 by
+# default) is in the past, and ClickHouse evaluates that against its own clock — a pinned date
+# would silently expire the inserted rows as soon as the wall clock moved past it. Every case
+# here places its events relative to `datetime.now(UTC)`, so no pinned clock is needed.
 class TestCheckTraceSettledActivity:
     @pytest.mark.django_db(transaction=True)
     def test_settled_when_quiet_beyond_margin(self, setup_data):
@@ -577,7 +580,6 @@ class TestCheckTraceSettledActivity:
         assert "trace active" in err.value.message
 
 
-@freeze_time("2026-07-23T12:00:00Z")
 class TestCheckSessionSettledActivity:
     @pytest.mark.django_db(transaction=True)
     def test_settled_when_quiet_beyond_margin(self, setup_data):
