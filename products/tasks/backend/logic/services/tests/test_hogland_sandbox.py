@@ -33,7 +33,7 @@ def _exec_result(**overrides) -> ExecResult:
     return ExecResult.model_validate(payload)
 
 
-def _mock_box(box_id: str = "hb-abc123", status: str = "running") -> MagicMock:
+def _mock_box(box_id: str = "box-abc123def456", status: str = "running") -> MagicMock:
     box = MagicMock()
     box.id = box_id
     box.status = status
@@ -76,8 +76,16 @@ class TestHoglandSandboxCreate:
         assert kwargs["env"]["PATH"] == _STATIC_BOX_ENV["PATH"]
         # Per-run values win over the static baseline.
         assert kwargs["env"]["IS_SANDBOX"] == "override"
-        assert sandbox.id == "hb-abc123"
+        assert sandbox.id == "box-abc123def456"
         assert config.snapshot_restored is False
+
+    def test_create_pins_config_to_the_golden_shape_for_the_ledger(self):
+        # A per-task override is ignored by the provisioned box, so the config must be
+        # pinned to the delivered shape — otherwise the usage ledger prices the override
+        # (e.g. 16 cores) against a 4-core hogbox and overbills.
+        config = SandboxConfig(name="oversized", cpu_cores=16, memory_gb=64, disk_size_gb=100)
+        _sandbox, _client = self._create(config)
+        assert (config.cpu_cores, config.memory_gb, config.disk_size_gb) == (4.0, 16.0, 64.0)
 
     @parameterized.expand([(template,) for template in SandboxTemplate if template != SandboxTemplate.DEFAULT_BASE])
     def test_create_rejects_templates_without_a_golden_snapshot(self, template: SandboxTemplate):
@@ -137,7 +145,7 @@ class TestHoglandSandboxLifecycle:
         client.get.side_effect = NotFoundError(status_code=404, body=None, request_id=None, message="nope")
         with patch("products.tasks.backend.logic.services.hogland_sandbox.get_hogland_client", return_value=client):
             with pytest.raises(SandboxNotFoundError):
-                HoglandSandbox.get_by_id("hb-gone")
+                HoglandSandbox.get_by_id("box-000000000000")
 
     @parameterized.expand(
         [
@@ -179,7 +187,7 @@ class TestHoglandSandboxLifecycle:
 
 
 class TestSandboxIdPrefixDispatch:
-    @parameterized.expand([("hb-q9k3", True), ("sb-abc123", False), ("sandbox-legacy", False)])
+    @parameterized.expand([("box-b99582fcb238", True), ("sb-abc123", False), ("sandbox-legacy", False)])
     def test_get_by_id_routes_on_id_prefix(self, sandbox_id: str, expect_hogland: bool):
         resolved = get_sandbox_class_for_sandbox_id(sandbox_id)
         assert (resolved is HoglandSandbox) == expect_hogland

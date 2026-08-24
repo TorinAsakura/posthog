@@ -60,6 +60,13 @@ TEMPLATE_TO_SNAPSHOT_ALIAS: dict[SandboxTemplate, str] = {
     SandboxTemplate.DEFAULT_BASE: "alias:posthog-tasks-default",
 }
 
+# The golden snapshot (baked by bake_hogland_snapshot) pins this machine shape. A hogland
+# restore must inherit-or-match it, so per-task overrides are ignored and the provisioned
+# box is always this size. Keep in sync with the shape bake_hogland_snapshot boots at.
+HOGLAND_GOLDEN_CPU_CORES = 4.0
+HOGLAND_GOLDEN_MEMORY_GB = 16.0
+HOGLAND_GOLDEN_DISK_GB = 64.0
+
 # `create()` blocks until the box is running; a cold boot on a fresh Karpenter node
 # can take minutes, and `exec` calls legitimately run up to the caller's
 # timeout_seconds (default 10 minutes). One generous read timeout covers both —
@@ -233,14 +240,20 @@ class HoglandSandbox(AgentServerLaunchMixin):
                 "Failed to create hogland sandbox", {"config_name": config.name, "error": str(e)}, cause=e
             )
 
-        if (config.cpu_cores, config.memory_gb) != (
-            SandboxConfig.model_fields["cpu_cores"].default,
-            SandboxConfig.model_fields["memory_gb"].default,
+        if (config.cpu_cores, config.memory_gb, config.disk_size_gb) != (
+            HOGLAND_GOLDEN_CPU_CORES,
+            HOGLAND_GOLDEN_MEMORY_GB,
+            HOGLAND_GOLDEN_DISK_GB,
         ):
             logger.info(
                 "Hogland sandbox ignores per-task resource overrides; using the golden snapshot's machine config",
                 extra={"sandbox_id": box.id, "cpu_cores": config.cpu_cores, "memory_gb": config.memory_gb},
             )
+        # Pin the config to the shape actually provisioned so the usage ledger prices the
+        # delivered box, not an ignored per-task override (which would otherwise misbill).
+        config.cpu_cores = HOGLAND_GOLDEN_CPU_CORES
+        config.memory_gb = HOGLAND_GOLDEN_MEMORY_GB
+        config.disk_size_gb = HOGLAND_GOLDEN_DISK_GB
 
         logger.info(f"Created hogland sandbox {box.id} for {config.name}")
         return cls(box=box, config=config)

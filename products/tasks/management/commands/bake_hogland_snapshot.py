@@ -29,6 +29,12 @@ from hogland import Hogbox, Hogland
 
 from posthog.dataclasses import frozen
 
+from products.tasks.backend.logic.services.hogland_sandbox import (
+    HOGLAND_GOLDEN_CPU_CORES,
+    HOGLAND_GOLDEN_DISK_GB,
+    HOGLAND_GOLDEN_MEMORY_GB,
+    get_hogland_api_token,
+)
 from products.tasks.backend.logic.services.local_skills import LocalSkillsCache, populate_skills_directory
 
 SANDBOX_IMAGES_DIR = Path("products/tasks/backend/sandbox/images")
@@ -239,7 +245,9 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         host = options["host"] or settings.HOGLAND_API_URL
-        token = options["token"] or settings.HOGLAND_API_TOKEN
+        # Prefer the projected token file over the static token, matching the runtime
+        # client, so a rebake works in a production-shaped environment.
+        token = options["token"] or get_hogland_api_token()
         if not host or not token:
             raise CommandError("Pass --host/--token or set HOGLAND_API_URL/HOGLAND_API_TOKEN")
 
@@ -248,10 +256,10 @@ class Command(BaseCommand):
         client = Hogland(token=token, base_url=host, timeout=httpx.Timeout(30 * 60, connect=15))
         self.stdout.write(f"Booting bake box on {host}...")
         box = client.create(
-            # Must match SandboxConfig defaults — restores inherit-or-match this spec.
-            cpus=4,
-            memory_mib=16384,
-            disk_gib=64,
+            # The golden shape every hogland task box inherits on restore.
+            cpus=HOGLAND_GOLDEN_CPU_CORES,
+            memory_mib=int(HOGLAND_GOLDEN_MEMORY_GB * 1024),
+            disk_gib=int(HOGLAND_GOLDEN_DISK_GB),
             name="posthog-tasks-bake",
             kind="posthog-tasks-bake",
             ttl_seconds=3600,
