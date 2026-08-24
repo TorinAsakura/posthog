@@ -77,6 +77,7 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
             self._validate_cloud_creation(request)
         try:
             result = wizard_facade.create_run_with_result(params)
+        # review: this conversion into actual API return codes is good, but this could be extract into a function
         except InvalidWorkspaceEnvironmentError:
             raise ValidationError({"detail": "Choose a workspace supported by this run environment."})
         except InvalidRepositoryError:
@@ -100,7 +101,9 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
             raise Throttled(detail="You've reached the daily cloud run limit. Try again tomorrow.")
         except (MissingGitHubIntegrationError, RepositoryNotAccessibleError):
             raise ValidationError({"detail": "Connect GitHub with access to this repository, then try again."})
+
         response_status = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
+
         return Response(WizardRunSerializer(result.run).data, status=response_status)
 
     @staticmethod
@@ -117,8 +120,8 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
         },
         description="Retrieve a Wizard run in this project.",
     )
+    # GET /projects/:projectId/wizard/runs/:runId
     def retrieve(self, request: Request, *args: object, **kwargs: object) -> Response:
-        # GET /projects/:projectId/wizard/runs/:runId
         run = self._get_run()
         return Response(WizardRunSerializer(run).data)
 
@@ -154,6 +157,7 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
                 run = wizard_facade.cancel_run(self.team_id, current.id)
 
             else:
+                # todo: once we have the state sync system, all transitions should be handled by it
                 run = wizard_facade.update_run_status(
                     self.team_id,
                     current.id,
@@ -180,6 +184,8 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
 
     def _get_owned_run(self) -> WizardRunDTO:
         run = self._get_run()
+
         if run.created_by_id != self.request.user.id:
             raise PermissionDenied("Only the user who started this Wizard run can update it.")
+
         return run

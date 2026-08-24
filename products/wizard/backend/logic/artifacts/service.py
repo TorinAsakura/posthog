@@ -50,6 +50,7 @@ def create_pull_request_artifact(params: CreatePullRequestArtifactInput) -> Wiza
 
 
 def list_run_artifacts(team_id: int, run_id: UUID) -> list[WizardRunArtifactDTO]:
+    # review: why do we need this call? I understand we need to validate if the run exists. But then that logic should be more explicit
     run = run_store.get_run(team_id, run_id)
     return store.list_artifacts(team_id, run.id)
 

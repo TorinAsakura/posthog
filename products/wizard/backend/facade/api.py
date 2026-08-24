@@ -109,6 +109,7 @@ def list_runs(params: ListWizardRunsInput) -> WizardRunPage:
     return run_service.list_runs(params)
 
 
+# review: what does this do? naming is confusing
 def advance_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
     return run_service.advance_run_stage(team_id, run_id, stage)
 

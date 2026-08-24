@@ -100,6 +100,7 @@ class WizardWorkerTimeoutError(Exception):
 def provision_worker(request: WizardWorkerProvisionRequest) -> WizardWorkerProvisioning:
     user = User.objects.get(id=request.created_by_id)
     wizard_token = create_wizard_oauth_access_token_for_user(user, request.team_id)
+    # review: this should be a configuration in the config file
     config = SandboxConfig(
         name=f"wizard-{request.run_id}",
         template=SandboxTemplate.DEFAULT_BASE,

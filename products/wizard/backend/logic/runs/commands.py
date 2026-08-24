@@ -17,8 +17,11 @@ def build_wizard_command(
 ) -> str:
     if not is_executable_wizard_version(wizard_version):
         raise ValueError("Invalid Wizard version")
+
     if any(_WIZARD_PROGRAM_COMMAND_PATTERN.fullmatch(argument) is None for argument in program_command):
         raise ValueError("Invalid Wizard program command")
+
+    # review: for dev, we should set POSTHOG_API_URL to localhost
     parts = [
         f"cd {shlex.quote(repository_path)} &&",
         f"timeout -k 30 {WIZARD_TIMEOUT_SECONDS}",
@@ -29,8 +32,10 @@ def build_wizard_command(
         f"--region {shlex.quote(_wizard_region())}",
         f"--project-id {shlex.quote(str(team_id))}",
     ]
+
     if settings.DEBUG:
         parts.append('--base-url "$POSTHOG_API_URL"')
+
     return " ".join(parts)
 
 

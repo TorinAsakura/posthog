@@ -28,6 +28,8 @@ from products.wizard.backend.models import WizardRun
 
 def _get_run_record(team_id: int, run_id: UUID, *, lock: bool = False) -> WizardRun:
     runs = WizardRun.objects.for_team(team_id)
+
+    # review: explain this
     if lock:
         runs = runs.select_for_update()
 
@@ -51,6 +53,7 @@ def create_run(
 ) -> WizardRunCreationResult:
     workspace_type, workspace_metadata = workspace_to_record(workspace)
     now = timezone.now()
+
     values = {
         "created_by_id": created_by_id,
         "environment": environment.value,
@@ -67,6 +70,7 @@ def create_run(
         "started_at": now if environment == WizardRunEnvironment.LOCAL else None,
         "deadline_at": now + WIZARD_RUN_DEADLINE if environment == WizardRunEnvironment.CLOUD else None,
     }
+
     if idempotency_key is None:
         run = WizardRun.objects.for_team(team_id).create(team_id=team_id, idempotency_key=None, **values)
         return WizardRunCreationResult(run=run_from_record(run), created=True)
@@ -76,6 +80,7 @@ def create_run(
         idempotency_key=idempotency_key,
         defaults=values,
     )
+
     return WizardRunCreationResult(run=run_from_record(run), created=created)
 
 

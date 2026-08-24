@@ -61,14 +61,21 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
             raise InvalidWorkspaceEnvironmentError
 
     request_fingerprint: str | None = None
-    if params.environment == WizardRunEnvironment.CLOUD:
+    is_cloud_run = params.environment == WizardRunEnvironment.CLOUD
+
+    if is_cloud_run:
         if params.idempotency_key is None:
             raise MissingWizardRunIdempotencyKeyError
+
         request_fingerprint = create_run_request_fingerprint(params)
+
         existing = store.get_run_by_idempotency_key(params.team_id, params.idempotency_key)
+
+        # review: isnt "if not existing" clearer?
         if existing is not None:
             if store.get_request_fingerprint(params.team_id, existing.id) != request_fingerprint:
                 raise WizardRunIdempotencyConflictError
+
             return WizardRunCreationResult(run=existing, created=False)
 
     user = User.objects.only("distinct_id").get(id=params.created_by_id)
@@ -86,6 +93,7 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
     if params.environment not in program.supported_environments:
         raise WizardProgramEnvironmentNotSupportedError
 
+    # review: this could be extract into a function?
     if isinstance(params.workspace, GitRepositoryWorkspace):
         validate_git_repository_name(params.workspace.repository)
 
@@ -108,6 +116,7 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
     with database_transaction.atomic():
         if params.environment == WizardRunEnvironment.CLOUD:
             admit_cloud_run(params.team_id, params.created_by_id, params.idempotency_key)
+
         result = store.create_run(
             team_id=params.team_id,
             created_by_id=params.created_by_id,
@@ -122,7 +131,9 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
         if not result.created and store.get_request_fingerprint(params.team_id, result.run.id) != request_fingerprint:
             raise WizardRunIdempotencyConflictError
 
-        if params.environment == WizardRunEnvironment.CLOUD and result.created:
+        should_dispatch_wizard_run = is_cloud_run and result.created
+
+        if should_dispatch_wizard_run:
             database_transaction.on_commit(
                 partial(
                     _enqueue_cloud_run,
@@ -134,14 +145,18 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
 
     if params.environment == WizardRunEnvironment.CLOUD:
         result = WizardRunCreationResult(run=store.get_run(params.team_id, result.run.id), created=result.created)
+
     if result.created:
         run_observability.run_created(result.run)
+
     return result
 
 
 def _enqueue_cloud_run(team_id: int, run_id: UUID) -> None:
     try:
+        # enqueues the wizard run dispatch to celery
         enqueue_dispatch(team_id, run_id)
+
     except Exception:
         logger.exception(
             "wizard_run_dispatch_enqueue_failed",
