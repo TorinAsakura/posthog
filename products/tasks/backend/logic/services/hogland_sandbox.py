@@ -47,7 +47,11 @@ from .sandbox import AgentServerResult, ExecutionResult, ExecutionStream, Sandbo
 
 logger = logging.getLogger(__name__)
 
-HOGLAND_TASKS_BOX_KIND = "posthog-tasks"
+# "agent" is a registered hogland kind (1h idle-TTL default) for API-driven
+# LLM sandbox runs — exactly this workload. Using it rather than an unregistered
+# kind means a call site that ever omits ttl_seconds inherits a safe default
+# instead of minting an immortal box.
+HOGLAND_TASKS_BOX_KIND = "agent"
 
 # Every template hogland supports maps to a global snapshot alias baked by
 # `manage.py bake_hogland_snapshot`. Only the plain default-template run is routed

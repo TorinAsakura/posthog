@@ -69,7 +69,7 @@ class TestHoglandSandboxCreate:
         # Restores must inherit the golden snapshot's machine config.
         for sizing_key in ("cpus", "memory_mib", "disk_gib"):
             assert sizing_key not in kwargs
-        assert kwargs["kind"] == "posthog-tasks"
+        assert kwargs["kind"] == "agent"
         assert kwargs["name"].startswith("sandbox-task-1-")
         assert sorted(kwargs["tags"]) == ["run_id=r1", "task_id=t1"]
         assert kwargs["env"]["GITHUB_TOKEN"] == "tok"
