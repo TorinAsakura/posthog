@@ -2935,6 +2935,14 @@ export namespace Schemas {
       warnings?: (DataWarehouseSyncWarning | AccessControlFilterWarning)[] | null;
     }
 
+    export type ActorsQuerySearchMode = typeof ActorsQuerySearchMode[keyof typeof ActorsQuerySearchMode];
+
+
+    export const ActorsQuerySearchMode = {
+      Contains: 'contains',
+      IdPrefix: 'id_prefix',
+    } as const;
+
     export type Compare = typeof Compare[keyof typeof Compare];
 
 
@@ -5264,6 +5272,8 @@ export namespace Schemas {
       properties?: (PersonPropertyFilter | PersonMetadataPropertyFilter | CohortPropertyFilter | HogQLPropertyFilter | EmptyPropertyFilter)[] | PropertyGroupFilterValue | null;
       response?: ActorsQueryResponse | null;
       search?: string | null;
+      /** How `search` matches. Only persons honor this; groups and sessions always match anywhere. */
+      searchMode?: ActorsQuerySearchMode | null;
       select?: string[] | null;
       source?: InsightActorsQuery | FunnelsActorsQuery | FunnelCorrelationActorsQuery | ExperimentActorsQuery | StickinessActorsQuery | PathsV2ActorsQuery | HogQLQuery | null;
       tags?: QueryLogTags | null;
@@ -93214,6 +93224,10 @@ export namespace Schemas {
      * Search persons, either by email (full text search) or distinct_id (exact match).
      */
     search?: string;
+    /**
+     * How `search` matches. `contains` (the default) matches the term anywhere. `id_prefix` needs distinct IDs and person UUIDs to match from the start, which is much faster on large projects; email and name still match anywhere.
+     */
+    search_mode?: PersonsListSearchMode;
     };
 
     export type PersonsListFormat = typeof PersonsListFormat[keyof typeof PersonsListFormat];
@@ -93222,6 +93236,14 @@ export namespace Schemas {
     export const PersonsListFormat = {
       Csv: 'csv',
       Json: 'json',
+    } as const;
+
+    export type PersonsListSearchMode = typeof PersonsListSearchMode[keyof typeof PersonsListSearchMode];
+
+
+    export const PersonsListSearchMode = {
+      Contains: 'contains',
+      IdPrefix: 'id_prefix',
     } as const;
 
     export type PersonsRetrieveParams = {
