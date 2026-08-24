@@ -924,7 +924,10 @@ async def create_sandbox_for_repository(input: CreateSandboxForRepositoryInput) 
                 )
 
     if creation_after_cancellation is not None:
-        sandbox = await asyncio.to_thread(get_sandbox_class_for_sandbox_id(creation_after_cancellation.sandbox_id).get_by_id, creation_after_cancellation.sandbox_id)
+        sandbox = await asyncio.to_thread(
+            get_sandbox_class_for_sandbox_id(creation_after_cancellation.sandbox_id).get_by_id,
+            creation_after_cancellation.sandbox_id,
+        )
         try:
             await asyncio.to_thread(sandbox.destroy)
         finally:
