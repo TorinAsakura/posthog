@@ -241,7 +241,7 @@ def test_execute_wizard_maps_worker_error(worker_error: Exception, error_type: s
 @patch("products.wizard.backend.logic.artifacts.service.object_storage.write")
 def test_create_run_artifacts_persists_git_diff_and_pull_request(_write: MagicMock, team, user) -> None:
     run = _create_cloud_run(team.id, user.id)
-    wizard_facade.start_run(team.id, run.id)
+    wizard_facade.update_run_status(team.id, run.id, WizardRunStatus.RUNNING)
     workspace = _workspace(run)
     diff = b"diff --git a/a b/a\n"
     pull_request = RepositoryPullRequest(

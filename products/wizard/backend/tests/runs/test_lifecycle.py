@@ -1,6 +1,3 @@
-from collections.abc import Callable
-from uuid import UUID
-
 import pytest
 from unittest.mock import patch
 
@@ -67,7 +64,7 @@ def test_get_run_is_scoped_to_team(team, user) -> None:
 def test_start_run_persists_running_status(team, user) -> None:
     created = _create_cloud_run(team.id, user.id)
 
-    started = wizard_facade.start_run(team.id, created.id)
+    started = wizard_facade.update_run_status(team.id, created.id, WizardRunStatus.RUNNING)
 
     assert started.status == WizardRunStatus.RUNNING
     assert started.started_at is not None
@@ -75,23 +72,15 @@ def test_start_run_persists_running_status(team, user) -> None:
     assert wizard_facade.get_run(team.id, created.id) == started
 
 
-@pytest.mark.parametrize(
-    "transition_action, expected_status",
-    (
-        (wizard_facade.complete_run, WizardRunStatus.COMPLETED),
-        (wizard_facade.cancel_run, WizardRunStatus.CANCELLED),
-    ),
-)
+@pytest.mark.parametrize("expected_status", (WizardRunStatus.COMPLETED, WizardRunStatus.CANCELLED))
 @pytest.mark.django_db
-def test_running_run_persists_terminal_status(
-    team,
-    user,
-    transition_action: Callable[[int, UUID], WizardRunDTO],
-    expected_status: WizardRunStatus,
-) -> None:
+def test_running_run_persists_terminal_status(team, user, expected_status: WizardRunStatus) -> None:
     created = _create_local_run(team.id, user.id)
 
-    transitioned = transition_action(team.id, created.id)
+    if expected_status == WizardRunStatus.CANCELLED:
+        transitioned = wizard_facade.cancel_run(team.id, created.id)
+    else:
+        transitioned = wizard_facade.update_run_status(team.id, created.id, expected_status)
 
     assert transitioned.status == expected_status
     assert transitioned.finished_at is not None
@@ -103,7 +92,12 @@ def test_running_run_persists_terminal_status(
 def test_fail_run_persists_error_code(team, user) -> None:
     created = _create_local_run(team.id, user.id)
 
-    failed = wizard_facade.fail_run(team.id, created.id, error_code=WizardRunErrorCode.TIMEOUT)
+    failed = wizard_facade.update_run_status(
+        team.id,
+        created.id,
+        WizardRunStatus.FAILED,
+        error_code=WizardRunErrorCode.TIMEOUT,
+    )
 
     assert failed.status == WizardRunStatus.FAILED
     assert failed.error_code == WizardRunErrorCode.TIMEOUT
@@ -115,7 +109,7 @@ def test_fail_run_persists_error_code(team, user) -> None:
 @pytest.mark.django_db
 def test_invalid_persisted_transition_leaves_run_unchanged(team, user) -> None:
     created = _create_local_run(team.id, user.id)
-    completed = wizard_facade.complete_run(team.id, created.id)
+    completed = wizard_facade.update_run_status(team.id, created.id, WizardRunStatus.COMPLETED)
 
     with pytest.raises(IllegalStatusTransitionError):
         wizard_facade.cancel_run(team.id, created.id)
@@ -129,6 +123,6 @@ def test_transition_run_is_scoped_to_team(team, user) -> None:
     created = _create_cloud_run(team.id, user.id)
 
     with pytest.raises(WizardRunNotFoundError):
-        wizard_facade.start_run(other_team.id, created.id)
+        wizard_facade.update_run_status(other_team.id, created.id, WizardRunStatus.RUNNING)
 
     assert wizard_facade.get_run(team.id, created.id) == created

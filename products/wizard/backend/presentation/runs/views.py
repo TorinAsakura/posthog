@@ -133,31 +133,40 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
         },
         description="Change the terminal status of a local Wizard run.",
     )
+    # PATCH /projects/:projectId/wizard/runs/:runId
     def partial_update(self, request: Request, *args: object, **kwargs: object) -> Response:
-        # PATCH /projects/:projectId/wizard/runs/:runId
         serializer = WizardRunStatusUpdateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         next_status = serializer.to_status()
+
         try:
             current = self._get_owned_run()
+
             if current.environment == WizardRunEnvironment.CLOUD:
                 if next_status != WizardRunStatus.CANCELLED:
                     raise Conflict(
                         "Only cancellation can be requested for a cloud Wizard run.", code="cloud_run_managed"
                     )
-                run = wizard_facade.cancel_cloud_run(self.team_id, current.id)
+
+                run = wizard_facade.cancel_run(self.team_id, current.id)
+
+            elif next_status == WizardRunStatus.CANCELLED:
+                run = wizard_facade.cancel_run(self.team_id, current.id)
+
             else:
-                run = wizard_facade.transition_run(
+                run = wizard_facade.update_run_status(
                     self.team_id,
                     current.id,
                     next_status,
                     error_code=serializer.to_error_code(),
                 )
+
         except IllegalStatusTransitionError:
             raise Conflict(
                 f"This Wizard run cannot be {next_status.value} from its current status.",
                 code="invalid_transition",
             )
+
         return Response(WizardRunSerializer(run).data)
 
     def _get_run(self) -> WizardRunDTO:

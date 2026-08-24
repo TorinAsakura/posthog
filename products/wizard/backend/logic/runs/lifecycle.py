@@ -175,15 +175,10 @@ def fail_run(
 
 
 def cancel_run(team_id: int, run_id: UUID) -> WizardRunDTO:
-    return transition_run(team_id, run_id, WizardRunStatus.CANCELLED)
-
-
-def cancel_cloud_run(team_id: int, run_id: UUID) -> WizardRunDTO:
     run = store.get_run(team_id, run_id)
-    if run.environment != WizardRunEnvironment.CLOUD:
-        raise InvalidWorkspaceEnvironmentError
     cancelled = transition_run(team_id, run_id, WizardRunStatus.CANCELLED)
-    request_cloud_run_cancellation(team_id, run_id)
+    if run.environment == WizardRunEnvironment.CLOUD:
+        request_cloud_run_cancellation(team_id, run_id)
     return cancelled
 
 

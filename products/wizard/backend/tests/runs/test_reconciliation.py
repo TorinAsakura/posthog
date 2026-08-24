@@ -60,7 +60,7 @@ def test_cloud_cancellation_survives_temporal_failure(team, user) -> None:
         "products.wizard.backend.logic.runs.cancellation.temporal_client.cancel_wizard_run_workflow",
         side_effect=RuntimeError,
     ):
-        cancelled = lifecycle.cancel_cloud_run(team.id, run.id)
+        cancelled = lifecycle.cancel_run(team.id, run.id)
 
     record = WizardRun.objects.for_team(team.id).get(id=run.id)
     assert cancelled.status == WizardRunStatus.CANCELLED

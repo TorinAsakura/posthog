@@ -34,7 +34,7 @@ def transition_cloud_run(
         return
 
     try:
-        wizard_facade.transition_run(team_id, run_id, status, error_code=error_code)
+        wizard_facade.update_run_status(team_id, run_id, status, error_code=error_code)
     except IllegalStatusTransitionError:
         current = _get_cloud_run(team_id, run_id)
         if _matches(current, status, error_code):

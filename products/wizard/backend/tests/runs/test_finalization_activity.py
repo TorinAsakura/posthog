@@ -45,7 +45,7 @@ def test_finalize_run_is_retry_safe(team, user, status: WizardRunStatus, error_c
                 workspace=GitRepositoryWorkspace(repository="posthog/posthog"),
             )
         )
-    wizard_facade.start_run(team.id, run.id)
+    wizard_facade.update_run_status(team.id, run.id, WizardRunStatus.RUNNING)
     input = WizardRunFinalizationActivityInput(
         team_id=team.id,
         run_id=run.id,

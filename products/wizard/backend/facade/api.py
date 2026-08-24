@@ -109,36 +109,15 @@ def list_runs(params: ListWizardRunsInput) -> WizardRunPage:
     return run_service.list_runs(params)
 
 
-def start_run(team_id: int, run_id: UUID) -> WizardRunDTO:
-    return run_service.start_run(team_id, run_id)
-
-
 def advance_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
     return run_service.advance_run_stage(team_id, run_id, stage)
-
-
-def complete_run(team_id: int, run_id: UUID) -> WizardRunDTO:
-    return run_service.complete_run(team_id, run_id)
-
-
-def fail_run(
-    team_id: int,
-    run_id: UUID,
-    *,
-    error_code: WizardRunErrorCode | None = None,
-) -> WizardRunDTO:
-    return run_service.fail_run(team_id, run_id, error_code=error_code)
 
 
 def cancel_run(team_id: int, run_id: UUID) -> WizardRunDTO:
     return run_service.cancel_run(team_id, run_id)
 
 
-def cancel_cloud_run(team_id: int, run_id: UUID) -> WizardRunDTO:
-    return run_service.cancel_cloud_run(team_id, run_id)
-
-
-def transition_run(
+def update_run_status(
     team_id: int,
     run_id: UUID,
     status: WizardRunStatus,
