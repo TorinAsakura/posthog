@@ -217,7 +217,7 @@ def transition_run(
     error_code: WizardRunErrorCode | None = None,
 ) -> WizardRunDTO:
     with database_transaction.atomic():
-        run = store.get_run(team_id, run_id, lock=True)
+        run = store.get_run_for_update(team_id, run_id)
         previous = run
         next_status = transition(run.status, next_status, error_code=error_code)
         run = store.set_run_status(team_id, run_id, next_status, error_code)

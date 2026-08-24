@@ -26,14 +26,9 @@ from products.wizard.backend.logic.runs.mappers import run_from_record, workspac
 from products.wizard.backend.models import WizardRun
 
 
-def _get_run_record(team_id: int, run_id: UUID, *, lock: bool = False) -> WizardRun:
-    runs = WizardRun.objects.for_team(team_id)
+def _get_run_record(team_id: int, run_id: UUID) -> WizardRun:
+    run = WizardRun.objects.for_team(team_id).filter(id=run_id).first()
 
-    # review: explain this
-    if lock:
-        runs = runs.select_for_update()
-
-    run = runs.filter(id=run_id).first()
     if run is None:
         raise WizardRunNotFoundError
 
@@ -86,6 +81,7 @@ def create_run(
 
 def get_run_by_idempotency_key(team_id: int, idempotency_key: str) -> WizardRunDTO | None:
     run = WizardRun.objects.for_team(team_id).filter(idempotency_key=idempotency_key).first()
+
     return run_from_record(run) if run is not None else None
 
 
@@ -129,8 +125,16 @@ def set_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRu
     return run_from_record(run)
 
 
-def get_run(team_id: int, run_id: UUID, *, lock: bool = False) -> WizardRunDTO:
-    return run_from_record(_get_run_record(team_id, run_id, lock=lock))
+def get_run(team_id: int, run_id: UUID) -> WizardRunDTO:
+    return run_from_record(_get_run_record(team_id, run_id))
+
+
+def get_run_for_update(team_id: int, run_id: UUID) -> WizardRunDTO:
+    run = WizardRun.objects.for_team(team_id).select_for_update().filter(id=run_id).first()
+    if run is None:
+        raise WizardRunNotFoundError
+
+    return run_from_record(run)
 
 
 def list_runs(params: ListWizardRunsInput) -> WizardRunPage:
@@ -149,15 +153,21 @@ def set_run_status(
     run.status = status.value
     run.error_code = error_code.value if error_code is not None else None
     run.error_message = error_message(error_code)
+
     update_fields = ["status", "error_code", "error_message", "updated_at"]
+
     now = timezone.now()
+
     if status == WizardRunStatus.RUNNING and run.started_at is None:
         run.started_at = now
         update_fields.append("started_at")
+
     if status in (WizardRunStatus.COMPLETED, WizardRunStatus.FAILED, WizardRunStatus.CANCELLED):
         run.finished_at = now
         run.stage = None
         run.stage_started_at = None
         update_fields.extend(["finished_at", "stage", "stage_started_at"])
+
     run.save(update_fields=update_fields)
+
     return run_from_record(run)
