@@ -136,7 +136,7 @@ def test_provision_worker_uses_persisted_run_identity(team, user) -> None:
     run = _create_cloud_run(team.id, user.id)
 
     with patch(
-        "products.wizard.backend.temporal.activities.workspace.cloud_worker.provision_worker",
+        "products.wizard.backend.temporal.activities.workspace.cloud_worker.provision_wizard_worker",
         return_value=_provisioning(),
     ) as provision:
         result = async_to_sync(_run_provision_worker)(WizardRunActivityInput(team_id=team.id, run_id=run.id))

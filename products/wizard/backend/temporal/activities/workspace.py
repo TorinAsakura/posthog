@@ -58,7 +58,7 @@ def provision_worker(input: WizardRunActivityInput) -> ProvisionedWizardWorker:
             workspace_type=WizardWorkspaceType.GIT_REPOSITORY,
         )
 
-    provisioning = cloud_worker.provision_worker(
+    provisioning = cloud_worker.provision_wizard_worker(
         WizardWorkerProvisionRequest(
             team_id=input.team_id,
             created_by_id=run.created_by_id,

@@ -14,7 +14,6 @@ from products.tasks.backend.facade.repo_selection import get_github_token
 from products.tasks.backend.facade.sandbox import (
     SandboxConfig,
     SandboxNotFoundError,
-    SandboxTemplate,
     get_sandbox_class,
     sandbox_repo_path,
 )
@@ -27,7 +26,11 @@ from products.wizard.backend.logic.runs.config import (
     PULL_REQUEST_BODY,
     PULL_REQUEST_COMMIT_MESSAGE,
     PULL_REQUEST_TITLE,
+    SANDBOX_CPU_CORES,
+    SANDBOX_DISK_SIZE_GB,
     SANDBOX_EXECUTION_TIMEOUT_SECONDS,
+    SANDBOX_MEMORY_GB,
+    SANDBOX_TEMPLATE_BASE,
     SANDBOX_TTL_SECONDS,
     WIZARD_ERROR_DETAIL_LENGTH,
     WIZARD_TIMEOUT_EXIT_CODE,
@@ -97,31 +100,14 @@ class WizardWorkerTimeoutError(Exception):
     pass
 
 
-def provision_worker(request: WizardWorkerProvisionRequest) -> WizardWorkerProvisioning:
+def provision_wizard_worker(request: WizardWorkerProvisionRequest) -> WizardWorkerProvisioning:
     user = User.objects.get(id=request.created_by_id)
     wizard_token = create_wizard_oauth_access_token_for_user(user, request.team_id)
-    # review: this should be a configuration in the config file
-    config = SandboxConfig(
-        name=f"wizard-{request.run_id}",
-        template=SandboxTemplate.DEFAULT_BASE,
-        default_execution_timeout_seconds=SANDBOX_EXECUTION_TIMEOUT_SECONDS,
-        ttl_seconds=SANDBOX_TTL_SECONDS,
-        memory_gb=4,
-        cpu_cores=2,
-        disk_size_gb=16,
-        environment_variables={
-            "POSTHOG_API_URL": settings.SANDBOX_API_URL or settings.SITE_URL,
-            "POSTHOG_PROJECT_ID": str(request.team_id),
-            "POSTHOG_WIZARD_API_KEY": wizard_token,
-        },
-        metadata={
-            "purpose": "wizard_run",
-            "team_id": str(request.team_id),
-            "wizard_run_id": str(request.run_id),
-        },
-    )
+
+    config = _build_sandbox_config(request, wizard_token)
     sandbox = get_sandbox_class().create(config)
     provisioned_at = timezone.now()
+
     return WizardWorkerProvisioning(
         sandbox_id=sandbox.id,
         resource_usage=WizardWorkerResourceUsage(
@@ -138,12 +124,14 @@ def clone_repository(request: GitRepositoryCloneRequest) -> str:
     sandbox = get_sandbox_class().get_by_id(request.sandbox_id)
     github_token = get_github_token(request.github_integration_id) or ""
     clone_result = sandbox.clone_repository(request.repository, github_token=github_token, shallow=True)
+
     _raise_for_failure(
         "repository clone",
         clone_result.exit_code,
         stdout=clone_result.stdout,
         stderr=clone_result.stderr,
     )
+
     return sandbox_repo_path(request.repository)
 
 
@@ -225,8 +213,10 @@ def measure_worker_usage(sandbox_id: str) -> WizardWorkerUsageMeasurement | None
     except Exception:
         logger.exception("wizard_worker_usage_measurement_failed", extra={"sandbox_id": sandbox_id})
         return None
+
     if cpu_usage_usec is None and billed_cpu_usage_usec is None:
         return None
+
     return WizardWorkerUsageMeasurement(
         cpu_usage_usec=cpu_usage_usec,
         billed_cpu_usage_usec=billed_cpu_usage_usec,
@@ -242,3 +232,25 @@ def _raise_for_failure(stage: str, exit_code: int, *, stdout: str = "", stderr: 
 def _failure_detail(stdout: str, stderr: str) -> str | None:
     output = stdout.strip() or stderr.strip()
     return output[-WIZARD_ERROR_DETAIL_LENGTH:] or None
+
+
+def _build_sandbox_config(request: WizardWorkerProvisionRequest, wizard_token: str) -> SandboxConfig:
+    return SandboxConfig(
+        name=f"wizard-{request.run_id}",
+        template=SANDBOX_TEMPLATE_BASE,
+        default_execution_timeout_seconds=SANDBOX_EXECUTION_TIMEOUT_SECONDS,
+        ttl_seconds=SANDBOX_TTL_SECONDS,
+        memory_gb=SANDBOX_MEMORY_GB,
+        cpu_cores=SANDBOX_CPU_CORES,
+        disk_size_gb=SANDBOX_DISK_SIZE_GB,
+        environment_variables={
+            "POSTHOG_API_URL": settings.SANDBOX_API_URL or settings.SITE_URL,
+            "POSTHOG_PROJECT_ID": str(request.team_id),
+            "POSTHOG_WIZARD_API_KEY": wizard_token,
+        },
+        metadata={
+            "purpose": "wizard_run",
+            "team_id": str(request.team_id),
+            "wizard_run_id": str(request.run_id),
+        },
+    )

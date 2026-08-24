@@ -20,7 +20,7 @@ from products.wizard.backend.logic.runs.worker import (
     create_git_repository_handoff,
     destroy_worker,
     execute_wizard,
-    provision_worker,
+    provision_wizard_worker,
 )
 
 
@@ -40,7 +40,7 @@ def test_provision_worker_configures_wizard_environment(
     create_wizard_token.return_value = "wizard-secret"
     get_sandbox_class.return_value.create.return_value.id = "worker-id"
 
-    provisioning = provision_worker(request)
+    provisioning = provision_wizard_worker(request)
 
     assert provisioning.sandbox_id == "worker-id"
     assert provisioning.resource_usage.cpu_cores == 2
