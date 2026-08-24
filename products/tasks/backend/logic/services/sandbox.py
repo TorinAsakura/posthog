@@ -760,17 +760,25 @@ def get_sandbox_class_for_backend(backend: str) -> SandboxClass:
     raise RuntimeError(f"Unsupported sandbox backend: {backend}")
 
 
-HOGLAND_SANDBOX_ID_PREFIX = "hb-"
+# hogland mints `box-<12 hex>` (hogd enforces `^box-[0-9a-f]{12}$`); Modal object ids
+# are `sb-...`. A box restored from a pen keeps a `box-` id, so this covers pens too.
+HOGLAND_SANDBOX_ID_PREFIX = "box-"
 
 
 def get_sandbox_class_for_sandbox_id(sandbox_id: str) -> SandboxClass:
     """Resolve the provider class for an existing sandbox from its id alone.
 
-    Hogland box ids are `hb-...` and Modal object ids `sb-...`, so the prefix is enough
+    Hogland box ids are `box-...` and Modal object ids `sb-...`, so the prefix is enough
     to route the ~20 `get_by_id` call sites that hold only a persisted sandbox id (the
     reaper, cleanup, and snapshot activities have no other backend context). Anything
     that is not a hogland id falls through to the process-wide provider, preserving the
     docker/local-dev behavior.
+
+    Getting this prefix wrong fails closed to the wrong provider: a hogland id would
+    resolve to Modal, whose `get_by_id` raises `SandboxNotFoundError`, so cleanup and the
+    reaper would silently skip a real hogbox and leak it. The persisted `sandbox_backend`
+    (see get_task_processing_context) is the authoritative signal for behavioral branches;
+    this prefix is a routing convenience checked against hogland's enforced id shape.
     """
     if sandbox_id.startswith(HOGLAND_SANDBOX_ID_PREFIX):
         return _get_hogland_sandbox_class()
