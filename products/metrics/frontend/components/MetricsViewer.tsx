@@ -26,6 +26,7 @@ import { dayjs } from 'lib/dayjs'
 import { useOnMountEffect } from 'lib/hooks/useOnMountEffect'
 import { getAccessControlDisabledReason } from 'lib/utils/accessControlUtils'
 import { DATE_TIME_FORMAT, formatDateRange } from 'lib/utils/datetime'
+import { urls } from 'scenes/urls'
 
 import {
     AccessControlLevel,
@@ -167,7 +168,8 @@ export const MetricsViewer = (): JSX.Element => {
         closeAddToDashboardModal,
     } = useActions(logic)
     const { items: pickerItems } = useValues(pickerLogic)
-    const { traceExemplars } = useValues(metricsSamplesLogic)
+    const { traceExemplars, errorSpikeExemplars, showErrorSpikes } = useValues(metricsSamplesLogic)
+    const { toggleShowErrorSpikes } = useActions(metricsSamplesLogic)
     const { exemplarDotClicked } = useActions(metricsUsageTrackingLogic)
     const metricsViewerDisabledReason = getAccessControlDisabledReason(
         AccessControlResourceType.Metrics,
@@ -176,6 +178,10 @@ export const MetricsViewer = (): JSX.Element => {
     const insightEditorDisabledReason = getMetricsInsightEditorDisabledReason()
     const tracingDisabledReason = getAccessControlDisabledReason(
         AccessControlResourceType.Tracing,
+        AccessControlLevel.Viewer
+    )
+    const errorTrackingDisabledReason = getAccessControlDisabledReason(
+        AccessControlResourceType.ErrorTracking,
         AccessControlLevel.Viewer
     )
 
@@ -200,6 +206,28 @@ export const MetricsViewer = (): JSX.Element => {
                       },
                   })),
         [traceExemplars, tracingDisabledReason, exemplarDotClicked]
+    )
+
+    // Error Tracking issue spikes as clickable dots — PoC for the metric->error-spike
+    // pivot. Team-wide (see METRICS_ERROR_OVERLAY_PLAN.md), toggled independently of
+    // trace exemplars, and skipped entirely without Error Tracking view access.
+    const errorSpikeMarkers: MetricsExemplar[] = useMemo(
+        () =>
+            !showErrorSpikes || errorTrackingDisabledReason
+                ? []
+                : errorSpikeExemplars.map((spike) => ({
+                      timeMs: dayjs(spike.timestamp).valueOf(),
+                      color: 'danger',
+                      onClick: () => {
+                          router.actions.push(urls.errorTrackingIssue(spike.issueId, { timestamp: spike.timestamp }))
+                      },
+                  })),
+        [showErrorSpikes, errorSpikeExemplars, errorTrackingDisabledReason]
+    )
+
+    const allExemplarMarkers: MetricsExemplar[] = useMemo(
+        () => [...exemplarMarkers, ...errorSpikeMarkers],
+        [exemplarMarkers, errorSpikeMarkers]
     )
 
     // Refetch the chart whenever any filter changes — the loader breakpoint debounces input.
@@ -281,6 +309,15 @@ export const MetricsViewer = (): JSX.Element => {
                             bordered
                             data-attr="metrics-viewer-live-toggle"
                             disabledReason={metricsViewerDisabledReason}
+                        />
+                        <LemonSwitch
+                            label="Error spikes"
+                            checked={showErrorSpikes}
+                            onChange={toggleShowErrorSpikes}
+                            tooltip="Mark Error Tracking issue spikes on the chart (team-wide, PoC)"
+                            bordered
+                            data-attr="metrics-viewer-error-spikes-toggle"
+                            disabledReason={metricsViewerDisabledReason ?? errorTrackingDisabledReason}
                         />
                     </div>
                 </div>
@@ -387,7 +424,7 @@ export const MetricsViewer = (): JSX.Element => {
                             <MetricsSeriesChart
                                 series={chartSeries}
                                 fallbackName={metricName}
-                                exemplars={exemplarMarkers}
+                                exemplars={allExemplarMarkers}
                             />
                         ) : !queryResultsLoading ? (
                             <div className="h-full flex items-center justify-center text-secondary text-sm">

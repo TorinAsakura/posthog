@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 import pytest
 from posthog.test.base import APIBaseTest
 from unittest.mock import patch
 
 from django.apps import apps
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from parameterized import parameterized
 from rest_framework import status
@@ -12,6 +15,8 @@ from posthog.constants import AvailableFeature
 from posthog.models.organization import OrganizationMembership
 from posthog.models.user import User
 from posthog.rbac.user_access_control import ACCESS_CONTROL_RESOURCES, AccessControlLevelResource
+
+from products.error_tracking.backend.models import ErrorTrackingIssue, ErrorTrackingSpikeEvent
 
 try:
     from ee.models.rbac.access_control import AccessControl
@@ -40,6 +45,30 @@ class TestMetricsValuesApi(APIBaseTest):
         response = self.client.get(f"/api/projects/{self.team.id}/metrics/values/", {"limit": limit})
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["attr"] == "limit"
+
+
+class TestMetricsErrorSpikesApi(APIBaseTest):
+    def test_returns_spikes_from_error_tracking_in_the_window(self) -> None:
+        issue = ErrorTrackingIssue.objects.create(team=self.team, name="Boom")
+        now = timezone.now()
+        ErrorTrackingSpikeEvent.objects.create(
+            team=self.team,
+            issue=issue,
+            detected_at=now,
+            computed_baseline=1.0,
+            current_bucket_value=10,
+        )
+
+        response = self.client.get(
+            f"/api/projects/{self.team.id}/metrics/error_spikes/",
+            {"dateFrom": (now - timedelta(hours=1)).isoformat()},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        results = response.json()["results"]
+        assert len(results) == 1
+        assert results[0]["issue_id"] == str(issue.id)
+        assert results[0]["issue_name"] == "Boom"
 
 
 class TestMetricsFeatureFlagGate(APIBaseTest):
@@ -111,6 +140,7 @@ class TestMetricsAccessControl(APIBaseTest):
             ("attribute_values", "GET", {}),
             ("query", "POST", {}),
             ("samples", "POST", {}),
+            ("error_spikes", "GET", {}),
             ("explain", "POST", {}),
             ("characterize", "POST", {}),
         ]
