@@ -1,9 +1,11 @@
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
 from unittest.mock import MagicMock, patch
 
 from django.apps import apps
+from django.utils import timezone
 
 from asgiref.sync import async_to_sync
 from temporalio.exceptions import ApplicationError
@@ -29,10 +31,12 @@ from products.wizard.backend.logic.runs.worker import (
     GitRepositoryHandoffRequest,
     WizardExecutionRequest,
     WizardWorkerExecutionError,
+    WizardWorkerProvisioning,
     WizardWorkerProvisionRequest,
     WizardWorkerResult,
     WizardWorkerTimeoutError,
 )
+from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage
 from products.wizard.backend.temporal.activities.errors import (
     WIZARD_REPOSITORY_ACCESS_ERROR_TYPE,
     WIZARD_WORKER_EXECUTION_ERROR_TYPE,
@@ -87,6 +91,19 @@ def _worker(run: WizardRunDTO) -> ProvisionedWizardWorker:
     )
 
 
+def _provisioning() -> WizardWorkerProvisioning:
+    return WizardWorkerProvisioning(
+        sandbox_id="worker-id",
+        resource_usage=WizardWorkerResourceUsage(
+            cpu_cores=2,
+            memory_gb=4,
+            disk_size_gb=16,
+            ttl_seconds=4500,
+            ttl_expires_at=timezone.now() + timedelta(seconds=4500),
+        ),
+    )
+
+
 def _workspace(run: WizardRunDTO) -> PreparedGitRepositoryWorkspace:
     return PreparedGitRepositoryWorkspace(
         team_id=run.team_id,
@@ -120,7 +137,7 @@ def test_provision_worker_uses_persisted_run_identity(team, user) -> None:
 
     with patch(
         "products.wizard.backend.temporal.activities.workspace.cloud_worker.provision_worker",
-        return_value="worker-id",
+        return_value=_provisioning(),
     ) as provision:
         result = async_to_sync(_run_provision_worker)(WizardRunActivityInput(team_id=team.id, run_id=run.id))
 
@@ -135,6 +152,7 @@ def test_provision_worker_uses_persisted_run_identity(team, user) -> None:
     worker_record = apps.get_model("wizard", "WizardWorker").objects.for_team(team.id).get(run_id=run.id)
     assert worker_record.sandbox_id == "worker-id"
     assert worker_record.cleanup_status == "active"
+    assert worker_record.resource_usage["cpu_cores"] == 2.0
 
     provision.reset_mock()
     repeated = async_to_sync(_run_provision_worker)(WizardRunActivityInput(team_id=team.id, run_id=run.id))

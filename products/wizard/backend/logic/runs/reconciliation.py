@@ -8,12 +8,7 @@ from products.wizard.backend.facade.enums import (
     WizardRunStatus,
     WizardWorkerCleanupStatus,
 )
-from products.wizard.backend.logic.runs import (
-    cancellation,
-    lifecycle,
-    worker as cloud_worker,
-    worker_store,
-)
+from products.wizard.backend.logic.runs import cancellation, lifecycle, worker_lifecycle
 from products.wizard.backend.logic.runs.config import RECONCILIATION_BATCH_SIZE
 from products.wizard.backend.logic.runs.queue import enqueue_dispatch
 from products.wizard.backend.models import WizardRun, WizardWorker
@@ -89,13 +84,10 @@ def reconcile_pending_worker_cleanup() -> int:
     for team_id, run_id, sandbox_id in pending:
         if sandbox_id is None:
             continue
-        worker_store.mark_cleanup_pending(team_id, run_id)
         try:
-            cloud_worker.destroy_worker(sandbox_id)
+            worker_lifecycle.cleanup_worker(team_id, run_id, sandbox_id)
         except Exception:
-            worker_store.mark_cleanup_failed(team_id, run_id)
             logger.exception("wizard_worker_reconciliation_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue
-        worker_store.mark_cleaned(team_id, run_id)
         reconciled += 1
     return reconciled

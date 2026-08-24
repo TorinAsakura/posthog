@@ -1,6 +1,9 @@
+import logging
+from datetime import timedelta
 from uuid import UUID
 
 from django.conf import settings
+from django.utils import timezone
 
 from posthog.dataclasses import frozen
 from posthog.models.user import User
@@ -29,6 +32,9 @@ from products.wizard.backend.logic.runs.config import (
     WIZARD_ERROR_DETAIL_LENGTH,
     WIZARD_TIMEOUT_EXIT_CODE,
 )
+from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage, WizardWorkerUsageMeasurement
+
+logger = logging.getLogger(__name__)
 
 
 @frozen
@@ -36,6 +42,12 @@ class WizardWorkerProvisionRequest:
     team_id: int
     created_by_id: int
     run_id: UUID
+
+
+@frozen
+class WizardWorkerProvisioning:
+    sandbox_id: str
+    resource_usage: WizardWorkerResourceUsage
 
 
 @frozen
@@ -85,7 +97,7 @@ class WizardWorkerTimeoutError(Exception):
     pass
 
 
-def provision_worker(request: WizardWorkerProvisionRequest) -> str:
+def provision_worker(request: WizardWorkerProvisionRequest) -> WizardWorkerProvisioning:
     user = User.objects.get(id=request.created_by_id)
     wizard_token = create_wizard_oauth_access_token_for_user(user, request.team_id)
     config = SandboxConfig(
@@ -107,7 +119,18 @@ def provision_worker(request: WizardWorkerProvisionRequest) -> str:
             "wizard_run_id": str(request.run_id),
         },
     )
-    return get_sandbox_class().create(config).id
+    sandbox = get_sandbox_class().create(config)
+    provisioned_at = timezone.now()
+    return WizardWorkerProvisioning(
+        sandbox_id=sandbox.id,
+        resource_usage=WizardWorkerResourceUsage(
+            cpu_cores=config.cpu_cores,
+            memory_gb=config.memory_gb,
+            disk_size_gb=config.disk_size_gb,
+            ttl_seconds=config.ttl_seconds,
+            ttl_expires_at=provisioned_at + timedelta(seconds=config.ttl_seconds),
+        ),
+    )
 
 
 def clone_repository(request: GitRepositoryCloneRequest) -> str:
@@ -141,21 +164,26 @@ def execute_wizard(request: WizardExecutionRequest) -> None:
 
 def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> WizardWorkerResult:
     sandbox = get_sandbox_class().get_by_id(request.sandbox_id)
+
     diff_result = sandbox.execute(
         build_git_diff_command(request.workspace_path),
         timeout_seconds=60,
     )
+
     _raise_for_failure(
         "diff capture",
         diff_result.exit_code,
         stdout=diff_result.stdout,
         stderr=diff_result.stderr,
     )
+
     diff = diff_result.stdout.encode("utf-8")
+
     if not diff:
         return WizardWorkerResult(diff=diff, pull_request=None)
 
     branch = pull_request_branch(request.run_id)
+
     try:
         repository_facade.create_signed_commit(
             sandbox,
@@ -163,6 +191,7 @@ def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> Wizar
             branch=branch,
             message=PULL_REQUEST_COMMIT_MESSAGE,
         )
+
         pull_request = repository_facade.create_pull_request(
             team_id=request.team_id,
             integration_id=request.github_integration_id,
@@ -172,8 +201,10 @@ def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> Wizar
             body=PULL_REQUEST_BODY,
             source="wizard",
         )
+
     except repository_facade.RepositoryPublishingError as error:
         raise WizardWorkerExecutionError("publishing", 1, str(error)) from error
+
     return WizardWorkerResult(diff=diff, pull_request=pull_request)
 
 
@@ -183,6 +214,23 @@ def destroy_worker(sandbox_id: str) -> None:
     except SandboxNotFoundError:
         return
     sandbox.destroy()
+
+
+def measure_worker_usage(sandbox_id: str) -> WizardWorkerUsageMeasurement | None:
+    try:
+        sandbox = get_sandbox_class().get_by_id(sandbox_id)
+        cpu_usage_usec = sandbox.read_cpu_usage_usec()
+        billed_cpu_usage_usec = sandbox.read_billed_cpu_usage_usec()
+    except Exception:
+        logger.exception("wizard_worker_usage_measurement_failed", extra={"sandbox_id": sandbox_id})
+        return None
+    if cpu_usage_usec is None and billed_cpu_usage_usec is None:
+        return None
+    return WizardWorkerUsageMeasurement(
+        cpu_usage_usec=cpu_usage_usec,
+        billed_cpu_usage_usec=billed_cpu_usage_usec,
+        measured_at=timezone.now(),
+    )
 
 
 def _raise_for_failure(stage: str, exit_code: int, *, stdout: str = "", stderr: str = "") -> None:

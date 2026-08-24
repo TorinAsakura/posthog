@@ -40,9 +40,13 @@ def test_provision_worker_configures_wizard_environment(
     create_wizard_token.return_value = "wizard-secret"
     get_sandbox_class.return_value.create.return_value.id = "worker-id"
 
-    sandbox_id = provision_worker(request)
+    provisioning = provision_worker(request)
 
-    assert sandbox_id == "worker-id"
+    assert provisioning.sandbox_id == "worker-id"
+    assert provisioning.resource_usage.cpu_cores == 2
+    assert provisioning.resource_usage.memory_gb == 4
+    assert provisioning.resource_usage.disk_size_gb == 16
+    assert provisioning.resource_usage.ttl_seconds == 75 * 60
     get_user.assert_called_once_with(id=request.created_by_id)
     config = get_sandbox_class.return_value.create.call_args.args[0]
     assert "GITHUB_TOKEN" not in config.environment_variables

@@ -1,9 +1,16 @@
+from dataclasses import replace
 from uuid import UUID
 
 from django.db.models import F
 from django.utils import timezone
 
 from products.wizard.backend.facade.enums import WizardWorkerCleanupStatus
+from products.wizard.backend.logic.runs.worker import WizardWorkerProvisioning
+from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerUsageMeasurement
+from products.wizard.backend.logic.runs.worker_serializers import (
+    worker_resource_usage_from_record,
+    worker_resource_usage_to_record,
+)
 from products.wizard.backend.models import WizardWorker
 
 
@@ -12,15 +19,32 @@ def get_sandbox_id(team_id: int, run_id: UUID) -> str | None:
     return worker.sandbox_id if worker is not None else None
 
 
-def record_provisioned_worker(team_id: int, run_id: UUID, sandbox_id: str) -> None:
+def record_provisioned_worker(team_id: int, run_id: UUID, provisioning: WizardWorkerProvisioning) -> None:
     WizardWorker.objects.for_team(team_id).update_or_create(
         team_id=team_id,
         run_id=run_id,
         defaults={
-            "sandbox_id": sandbox_id,
+            "sandbox_id": provisioning.sandbox_id,
+            "resource_usage": worker_resource_usage_to_record(provisioning.resource_usage),
             "cleanup_status": WizardWorkerCleanupStatus.ACTIVE.value,
             "cleanup_error": None,
         },
+    )
+
+
+def record_usage(team_id: int, run_id: UUID, usage: WizardWorkerUsageMeasurement) -> None:
+    worker = WizardWorker.objects.for_team(team_id).only("resource_usage").get(run_id=run_id)
+    resource_usage = worker_resource_usage_from_record(worker.resource_usage)
+
+    updated_resource_usage = replace(
+        resource_usage,
+        provider_cpu_usage_usec=usage.cpu_usage_usec,
+        provider_billed_cpu_usage_usec=usage.billed_cpu_usage_usec,
+        provider_usage_measured_at=usage.measured_at,
+    )
+
+    WizardWorker.objects.for_team(team_id).filter(run_id=run_id).update(
+        resource_usage=worker_resource_usage_to_record(updated_resource_usage)
     )
 
 

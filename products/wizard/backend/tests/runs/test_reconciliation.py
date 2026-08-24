@@ -110,7 +110,13 @@ def test_reconciliation_destroys_pending_worker(team, user) -> None:
         cleanup_status=WizardWorkerCleanupStatus.PENDING.value,
     )
 
-    with patch("products.wizard.backend.logic.runs.reconciliation.cloud_worker.destroy_worker") as destroy:
+    with (
+        patch(
+            "products.wizard.backend.logic.runs.worker_lifecycle.cloud_worker.measure_worker_usage",
+            return_value=None,
+        ),
+        patch("products.wizard.backend.logic.runs.worker_lifecycle.cloud_worker.destroy_worker") as destroy,
+    ):
         result = reconciliation.reconcile_pending_worker_cleanup()
 
     assert result == 1

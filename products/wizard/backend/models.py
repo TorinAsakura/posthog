@@ -165,11 +165,18 @@ class WizardRunArtifact(UUIDModel, TeamScopedRootMixin):
         constraints = [models.UniqueConstraint(fields=["run", "type"], name="unique_wizard_artifact_type_per_run")]
 
 
+# This tracks provisioned Wizard Workers, helping monitor resource
+# usage, and handle provisioning-related errors.
 class WizardWorker(UUIDModel, TeamScopedRootMixin, UpdatedMetaFields):
     team = models.ForeignKey("posthog.Team", on_delete=models.CASCADE, related_name="+", db_constraint=False)
     run = models.OneToOneField(WizardRun, on_delete=models.CASCADE, related_name="worker")
+
     created_at = models.DateTimeField(auto_now_add=True)
+
     sandbox_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
+
+    resource_usage = models.JSONField(null=True, blank=True)
+
     cleanup_status = models.CharField(
         max_length=20,
         choices=[(status.value, status.value) for status in WizardWorkerCleanupStatus],

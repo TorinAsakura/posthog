@@ -1,0 +1,24 @@
+from datetime import datetime
+from typing import Literal
+
+from posthog.dataclasses import frozen
+
+
+@frozen
+class WizardWorkerResourceUsage:
+    cpu_cores: float
+    memory_gb: float
+    disk_size_gb: float
+    ttl_seconds: int
+    ttl_expires_at: datetime
+    provider_cpu_usage_usec: int | None = None
+    provider_billed_cpu_usage_usec: int | None = None
+    provider_usage_measured_at: datetime | None = None
+    version: Literal[1] = 1
+
+
+@frozen
+class WizardWorkerUsageMeasurement:
+    cpu_usage_usec: int | None
+    billed_cpu_usage_usec: int | None
+    measured_at: datetime

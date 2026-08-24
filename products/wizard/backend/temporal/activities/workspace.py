@@ -14,6 +14,7 @@ from products.wizard.backend.facade.enums import (
 )
 from products.wizard.backend.logic.runs import (
     worker as cloud_worker,
+    worker_lifecycle,
     worker_store,
 )
 from products.wizard.backend.logic.runs.worker import GitRepositoryCloneRequest, WizardWorkerProvisionRequest
@@ -57,19 +58,19 @@ def provision_worker(input: WizardRunActivityInput) -> ProvisionedWizardWorker:
             workspace_type=WizardWorkspaceType.GIT_REPOSITORY,
         )
 
-    sandbox_id = cloud_worker.provision_worker(
+    provisioning = cloud_worker.provision_worker(
         WizardWorkerProvisionRequest(
             team_id=input.team_id,
             created_by_id=run.created_by_id,
             run_id=input.run_id,
         )
     )
-    worker_store.record_provisioned_worker(input.team_id, input.run_id, sandbox_id)
+    worker_store.record_provisioned_worker(input.team_id, input.run_id, provisioning)
     transition_cloud_run(input.team_id, input.run_id, WizardRunStatus.RUNNING)
     return ProvisionedWizardWorker(
         team_id=input.team_id,
         run_id=input.run_id,
-        sandbox_id=sandbox_id,
+        sandbox_id=provisioning.sandbox_id,
         workspace_type=WizardWorkspaceType.GIT_REPOSITORY,
     )
 
@@ -126,13 +127,7 @@ def clone_repository(input: ProvisionedWizardWorker) -> PreparedGitRepositoryWor
 @activity.defn(name="wizard_destroy_worker")
 @asyncify
 def destroy_worker(input: ProvisionedWizardWorker) -> None:
-    worker_store.mark_cleanup_pending(input.team_id, input.run_id)
-    try:
-        cloud_worker.destroy_worker(input.sandbox_id)
-    except Exception:
-        worker_store.mark_cleanup_failed(input.team_id, input.run_id)
-        raise
-    worker_store.mark_cleaned(input.team_id, input.run_id)
+    worker_lifecycle.cleanup_worker(input.team_id, input.run_id, input.sandbox_id)
 
 
 def _get_cloud_run(input: WizardRunActivityInput) -> WizardRunDTO:
