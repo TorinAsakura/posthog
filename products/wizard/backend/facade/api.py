@@ -161,7 +161,7 @@ def list_run_artifacts(team_id: int, run_id: UUID) -> list[WizardRunArtifactDTO]
 
 
 def validate_git_repository(repository: str) -> None:
-    run_service.validate_git_repository(repository)
+    run_service.validate_git_repository_name(repository)
 
 
 def validate_wizard_version(wizard_version: object) -> str:

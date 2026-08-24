@@ -41,7 +41,7 @@ from products.wizard.backend.logic.runs.admission import admit_cloud_run
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
 from products.wizard.backend.logic.runs.queue import enqueue_dispatch
 from products.wizard.backend.logic.runs.transitions import transition
-from products.wizard.backend.logic.runs.validation import validate_git_repository
+from products.wizard.backend.logic.runs.validation import validate_git_repository_name
 from products.wizard.backend.observability import service as run_observability
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
         raise WizardProgramEnvironmentNotSupportedError
 
     if isinstance(params.workspace, GitRepositoryWorkspace):
-        validate_git_repository(params.workspace.repository)
+        validate_git_repository_name(params.workspace.repository)
 
         integration_id = repo_selection.resolve_team_github_integration_id(params.team_id)
 
