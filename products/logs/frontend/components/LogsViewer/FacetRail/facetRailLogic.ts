@@ -6,7 +6,13 @@ import { LogsViewerFilters } from 'products/logs/frontend/components/LogsViewer/
 import { logsViewerFiltersLogic } from 'products/logs/frontend/components/LogsViewer/Filters/logsViewerFiltersLogic'
 
 import type { UniversalFiltersGroup } from '../../../../../../frontend/src/types'
-import { FacetSource, cycleResourceAttributeFilter, logFilterExclusions, setLogFilterExclusions } from './facets'
+import {
+    FacetSource,
+    cycleAttributeFilter,
+    cycleResourceAttributeFilter,
+    logFilterExclusions,
+    setLogFilterExclusions,
+} from './facets'
 
 export interface FacetRailLogicProps {
     id: string
@@ -120,6 +126,12 @@ export const facetRailLogic = kea<facetRailLogicType>([
                 // Selection lives as log_resource_attribute filters inside the group; a click
                 // cycles the value included → excluded → cleared.
                 actions.setFilterGroup(cycleResourceAttributeFilter(filterGroup, source.key, value), false)
+                return
+            }
+
+            if (source.type === 'attribute') {
+                // Same shape as resourceAttribute, but log_attribute filters — custom facets only.
+                actions.setFilterGroup(cycleAttributeFilter(filterGroup, source.key, value), false)
                 return
             }
 

@@ -5,6 +5,10 @@ import {
     FACETS as CONFIGURED_FACETS,
     FacetConfig,
     FacetScope,
+    attributeSelection,
+    buildCustomFacet,
+    customFacetIdentity,
+    cycleAttributeFilter,
     cycleResourceAttributeFilter,
     facetScopeSignature,
     filterFacetsByName,
@@ -181,6 +185,30 @@ describe('facets', () => {
                     included: [],
                     excluded: ['a'],
                 })
+            })
+        })
+
+        describe('attributeSelection / cycleAttributeFilter', () => {
+            const ATTRIBUTE_KEY = 'http.status_code'
+
+            it('cycles a value and writes a log_attribute filter, not log_resource_attribute', () => {
+                const group = cycleAttributeFilter(groupOf([]), ATTRIBUTE_KEY, '500')
+                expect((group.values[0] as UniversalFiltersGroup).values).toEqual([
+                    {
+                        key: ATTRIBUTE_KEY,
+                        type: PropertyFilterType.LogAttribute,
+                        operator: PropertyOperator.Exact,
+                        value: ['500'],
+                    },
+                ])
+                expect(attributeSelection(group, ATTRIBUTE_KEY)).toEqual({ included: ['500'], excluded: [] })
+            })
+
+            it('does not read a log_resource_attribute filter under the same key', () => {
+                // A resource attribute and a plain attribute can share a key name — the two must stay
+                // in separate filter types, or toggling one would silently affect the other's selection.
+                const group = groupOf([railFilter(PropertyOperator.Exact, ['500'], ATTRIBUTE_KEY)])
+                expect(attributeSelection(group, ATTRIBUTE_KEY)).toEqual({ included: [], excluded: [] })
             })
         })
 
@@ -431,6 +459,28 @@ describe('facets', () => {
 
         it('keeps column facets whatever the tenant emits', () => {
             expect(resolveFacets(CONFIGURED_FACETS, []).map((f) => f.key)).toEqual(['level', 'service'])
+        })
+
+        it('passes a plain-attribute facet through unchanged, regardless of presence', () => {
+            // Custom facets are added by the user picking a real key, not resolved against a curated
+            // alias list — resolveFacets must never drop or rewrite them the way it does resourceAttribute.
+            const attributeFacet = buildCustomFacet('http.status_code', 'attribute')
+            expect(resolveFacets([attributeFacet], [])).toEqual([attributeFacet])
+        })
+    })
+
+    describe('buildCustomFacet / customFacetIdentity', () => {
+        it.each<['attribute' | 'resourceAttribute']>([['attribute'], ['resourceAttribute']])(
+            'round-trips the key and sourceType through a %s facet',
+            (sourceType) => {
+                const built = buildCustomFacet('http.status_code', sourceType)
+                expect(built.removable).toBe(true)
+                expect(customFacetIdentity(built)).toEqual({ key: 'http.status_code', sourceType })
+            }
+        )
+
+        it('returns null for a curated (non-removable) facet', () => {
+            expect(customFacetIdentity(CONFIGURED_FACETS[0])).toBeNull()
         })
     })
 })

@@ -3,11 +3,14 @@ import { useMemo } from 'react'
 
 import { logsViewerFiltersLogic } from 'products/logs/frontend/components/LogsViewer/Filters/logsViewerFiltersLogic'
 
+import { customFacetsLogic } from './customFacetsLogic'
 import { Facet, FacetOption } from './Facet'
 import { facetRailLogic } from './facetRailLogic'
 import {
     FacetConfig,
     FacetFilterKey,
+    attributeSelection,
+    customFacetIdentity,
     logFilterExclusions,
     mergeSelectedIntoOptions,
     resourceAttributeSelection,
@@ -32,6 +35,7 @@ export function RailFacet({ id, facet, hidden }: RailFacetProps): JSX.Element | 
     const { setFacetSearch } = useActions(facetValuesLogic(logicProps))
     const { severityLevels, serviceNames, filterGroup } = useValues(logsViewerFiltersLogic({ id }))
     const { toggleFacetValue, toggleFacetCollapsed } = useActions(facetRailLogic({ id }))
+    const { removeCustomFacet } = useActions(customFacetsLogic)
 
     if (hidden) {
         return null
@@ -43,19 +47,25 @@ export function RailFacet({ id, facet, hidden }: RailFacetProps): JSX.Element | 
         serviceNames: serviceNames ?? [],
     }
     // Selection: column facets read includes from their dedicated filter field and exclusions
-    // from the is_not log filter under their exclusionKey (when they have one);
-    // resource-attribute facets read their log_resource_attribute filters, both polarities.
+    // from the is_not log filter under their exclusionKey (when they have one); resource-attribute
+    // and plain-attribute facets read their own property filters, both polarities.
     const { included: selected, excluded } =
         source.type === 'resourceAttribute'
             ? resourceAttributeSelection(filterGroup, source.key)
-            : {
-                  included: selectedByKey[source.filterKey],
-                  excluded: source.exclusionKey ? logFilterExclusions(filterGroup, source.exclusionKey) : [],
-              }
+            : source.type === 'attribute'
+              ? attributeSelection(filterGroup, source.key)
+              : {
+                    included: selectedByKey[source.filterKey],
+                    excluded: source.exclusionKey ? logFilterExclusions(filterGroup, source.exclusionKey) : [],
+                }
     // Values + counts come from the cross-filtered endpoint.
     const fetched: FacetOption[] = facetValues.map((r) => ({ value: r.value, label: r.value, count: r.count }))
     const onToggle = (value: string): void => toggleFacetValue(source, value)
     const onToggleCollapsed = (): void => toggleFacetCollapsed(facet.key)
+    const customIdentity = customFacetIdentity(facet)
+    const onRemove = customIdentity
+        ? (): void => removeCustomFacet(customIdentity.key, customIdentity.sourceType)
+        : undefined
 
     if (facet.kind === 'fixed') {
         // Fixed value set from config, counts overlaid. Missing values render as a dimmed 0.
@@ -75,6 +85,7 @@ export function RailFacet({ id, facet, hidden }: RailFacetProps): JSX.Element | 
                 collapsed={collapsed}
                 onToggleCollapsed={onToggleCollapsed}
                 dimZeroCounts
+                onRemove={onRemove}
             />
         )
     }
@@ -101,6 +112,7 @@ export function RailFacet({ id, facet, hidden }: RailFacetProps): JSX.Element | 
             collapsed={collapsed}
             onToggleCollapsed={onToggleCollapsed}
             maxHeight={facet.maxHeight}
+            onRemove={onRemove}
         />
     )
 }
