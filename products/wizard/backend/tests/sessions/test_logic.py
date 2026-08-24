@@ -397,7 +397,7 @@ def test_list_for_team_returns_sessions_ordered_by_started_at_desc(team):
 @pytest.mark.django_db
 @patch("products.wizard.backend.logic.sessions.lifecycle.sync_wizard_event_definitions.delay")
 def test_upsert_counts_a_terminal_transition_exactly_once(_mock_sync, team):
-    counter = WIZARD_SESSIONS_FINISHED_TOTAL.labels(workflow="other", outcome="completed")
+    counter = WIZARD_SESSIONS_FINISHED_TOTAL.labels(program="other", outcome="completed")
     before = counter._value.get()
 
     wizard_facade.upsert(_input(team.id, run_phase=WizardSessionRunPhase.RUNNING))
@@ -409,7 +409,7 @@ def test_upsert_counts_a_terminal_transition_exactly_once(_mock_sync, team):
 
 @pytest.mark.django_db
 def test_upsert_counts_a_session_created_already_terminal(team):
-    counter = WIZARD_SESSIONS_FINISHED_TOTAL.labels(workflow="other", outcome="error")
+    counter = WIZARD_SESSIONS_FINISHED_TOTAL.labels(program="other", outcome="error")
     before = counter._value.get()
 
     wizard_facade.upsert(_input(team.id, run_phase=WizardSessionRunPhase.ERROR, error={"type": "boom", "message": "x"}))
