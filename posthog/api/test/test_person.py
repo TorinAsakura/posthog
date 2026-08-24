@@ -85,6 +85,30 @@ class TestPerson(ClickhouseTestMixin, APIBaseTest, QueryMatchingTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.json()["results"]), 1)
 
+    def test_search_mode(self) -> None:
+        _create_person(
+            team=self.team,
+            distinct_ids=["distinct_id_3"],
+            properties={"email": "someone@gmail.com"},
+        )
+        flush_persons_and_events()
+
+        response = self.client.get("/api/person/?search=distinct_id&search_mode=id_prefix")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()["results"]), 1)
+
+        # Matching from the middle of a distinct ID only works in the default mode.
+        response = self.client.get("/api/person/?search=stinct_id&search_mode=id_prefix")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()["results"]), 0)
+
+        response = self.client.get("/api/person/?search=stinct_id")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()["results"]), 1)
+
+        response = self.client.get("/api/person/?search=stinct_id&search_mode=nonsense")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     @also_test_with_materialized_columns(event_properties=["email"], person_properties=["email"])
     @snapshot_clickhouse_queries
     def test_search_person_id(self) -> None:

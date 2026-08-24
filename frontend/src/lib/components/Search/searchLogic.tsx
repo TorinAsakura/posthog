@@ -26,7 +26,7 @@ import { splitPath, unescapePath } from '~/layout/panel-layout/ProjectTree/utils
 import { groupsModel } from '~/models/groupsModel'
 import { recentItemsModel } from '~/models/recentItemsModel'
 import { getTreeItemsMetadata, getTreeItemsNew, getTreeItemsProducts } from '~/products'
-import { FileSystemEntry, GroupsQueryResponse } from '~/queries/schema/schema-general'
+import { ActorsQuerySearchMode, FileSystemEntry, GroupsQueryResponse } from '~/queries/schema/schema-general'
 import { matchesFlagDefinition } from '~/scenes/settings/flagGating'
 import { Setting, SettingSection, SettingSectionId } from '~/scenes/settings/types'
 import { ActivityTab, FileSystemIconColor, GroupTypeIndex, PersonType, SearchResponse } from '~/types'
@@ -599,7 +599,14 @@ export const searchLogic = kea<searchLogicType>([
                         return []
                     }
 
-                    const response = await api.persons.list({ search: trimmed, limit: SEARCH_LIMIT })
+                    // Typeahead search runs on every keystroke, so it asks for the cheap match:
+                    // distinct IDs and person UUIDs from the start of the value. Palette users
+                    // paste or type identifiers whole, so anchoring costs them nothing.
+                    const response = await api.persons.list({
+                        search: trimmed,
+                        search_mode: ActorsQuerySearchMode.IdPrefix,
+                        limit: SEARCH_LIMIT,
+                    })
                     breakpoint()
 
                     return response.results

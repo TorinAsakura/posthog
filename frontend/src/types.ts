@@ -42,6 +42,7 @@ import { SurveyRatingScaleValue, WEB_SAFE_FONTS } from 'scenes/surveys/constants
 
 import { RootAssistantMessage } from '~/queries/schema/schema-assistant-messages'
 import type {
+    ActorsQuerySearchMode,
     CoreEvent,
     CurrencyCode,
     CustomerAnalyticsConfig,
@@ -1691,6 +1692,7 @@ export interface PersonType {
 export interface PersonListParams {
     properties?: AnyPropertyFilter[]
     search?: string
+    search_mode?: ActorsQuerySearchMode
     cohort?: number
     distinct_id?: string
     include_total?: boolean // PostHog 3000-only

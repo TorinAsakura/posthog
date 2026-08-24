@@ -26,7 +26,7 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework_csv import renderers as csvrenderers
 
-from posthog.schema import ActorsQuery, ProductKey
+from posthog.schema import ActorsQuery, ActorsQuerySearchMode, ProductKey
 
 from posthog.hogql.constants import CSV_EXPORT_LIMIT
 
@@ -152,6 +152,18 @@ def get_person_name_helper(
         # Prefer non-UUID distinct IDs (presumably from user identification) over UUIDs
         return sorted(distinct_ids, key=is_anonymous_id)[0]
     return str(person_pk)
+
+
+def _search_mode(request: request.Request) -> ActorsQuerySearchMode:
+    raw = request.GET.get("search_mode")
+    if not raw:
+        return ActorsQuerySearchMode.CONTAINS
+    try:
+        return ActorsQuerySearchMode(raw)
+    except ValueError:
+        raise ValidationError(
+            f"Invalid search_mode '{raw}'. Expected one of: {', '.join(mode.value for mode in ActorsQuerySearchMode)}."
+        )
 
 
 class PersonsWebBurstThrottle(UserOrEmailRateThrottle):
@@ -539,6 +551,16 @@ class PersonViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
                 OpenApiTypes.STR,
                 description="Search persons, either by email (full text search) or distinct_id (exact match).",
             ),
+            OpenApiParameter(
+                "search_mode",
+                OpenApiTypes.STR,
+                enum=[mode.value for mode in ActorsQuerySearchMode],
+                description=(
+                    "How `search` matches. `contains` (the default) matches the term anywhere. "
+                    "`id_prefix` needs distinct IDs and person UUIDs to match from the start, "
+                    "which is much faster on large projects; email and name still match anywhere."
+                ),
+            ),
             PersonPropertiesSerializer(required=False),
         ],
     )
@@ -591,6 +613,7 @@ class PersonViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
             select=["id"],
             properties=person_properties,
             search=filter.search or None,
+            searchMode=_search_mode(request),
             orderBy=["created_at DESC", "id DESC"],
             limit=filter.limit,
             offset=filter.offset,
