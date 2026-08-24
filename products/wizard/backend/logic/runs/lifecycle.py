@@ -202,10 +202,12 @@ def request_cloud_run_cancellation(team_id: int, run_id: UUID) -> None:
     cancellation_service.deliver_cancellation(team_id, run_id)
 
 
-def advance_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
+def update_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
     run = store.get_run(team_id, run_id)
+
     if run.status not in (WizardRunStatus.CREATED, WizardRunStatus.RUNNING):
         raise IllegalStatusTransitionError
+
     return store.set_run_stage(team_id, run_id, stage)
 
 

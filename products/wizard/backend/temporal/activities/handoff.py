@@ -16,7 +16,7 @@ from products.wizard.backend.temporal.contracts import PreparedGitRepositoryWork
 @activity.defn(name="wizard_create_run_artifacts")
 @asyncify
 def create_run_artifacts(input: PreparedGitRepositoryWorkspace) -> None:
-    wizard_facade.advance_run_stage(input.team_id, input.run_id, WizardRunStage.CREATING_ARTIFACTS)
+    wizard_facade.update_run_stage(input.team_id, input.run_id, WizardRunStage.CREATING_ARTIFACTS)
     try:
         result = cloud_worker.create_git_repository_handoff(
             GitRepositoryHandoffRequest(

@@ -17,7 +17,7 @@ from products.wizard.backend.temporal.contracts import PreparedGitRepositoryWork
 @activity.defn(name="wizard_execute")
 @asyncify
 def execute_wizard(input: PreparedGitRepositoryWorkspace) -> None:
-    wizard_facade.advance_run_stage(input.team_id, input.run_id, WizardRunStage.EXECUTING_WIZARD)
+    wizard_facade.update_run_stage(input.team_id, input.run_id, WizardRunStage.EXECUTING_WIZARD)
     run = wizard_facade.get_run(input.team_id, input.run_id)
     try:
         cloud_worker.execute_wizard(

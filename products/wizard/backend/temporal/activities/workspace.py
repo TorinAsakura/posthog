@@ -35,7 +35,7 @@ from products.wizard.backend.temporal.contracts import (
 @asyncify
 def provision_worker(input: WizardRunActivityInput) -> ProvisionedWizardWorker:
     run = _get_cloud_run(input)
-    wizard_facade.advance_run_stage(input.team_id, input.run_id, WizardRunStage.PROVISIONING)
+    wizard_facade.update_run_stage(input.team_id, input.run_id, WizardRunStage.PROVISIONING)
     if run.created_by_id is None:
         raise ApplicationError(
             "Wizard run creator is no longer available.",
@@ -79,7 +79,7 @@ def provision_worker(input: WizardRunActivityInput) -> ProvisionedWizardWorker:
 @asyncify
 def clone_repository(input: ProvisionedWizardWorker) -> PreparedGitRepositoryWorkspace:
     run = _get_cloud_run(WizardRunActivityInput(team_id=input.team_id, run_id=input.run_id))
-    wizard_facade.advance_run_stage(input.team_id, input.run_id, WizardRunStage.PREPARING_WORKSPACE)
+    wizard_facade.update_run_stage(input.team_id, input.run_id, WizardRunStage.PREPARING_WORKSPACE)
     if not isinstance(run.workspace, GitRepositoryWorkspace):
         raise ApplicationError(
             "Wizard run does not have a Git repository workspace.",

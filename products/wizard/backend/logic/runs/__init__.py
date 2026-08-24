@@ -1,5 +1,4 @@
 from products.wizard.backend.logic.runs.lifecycle import (
-    advance_run_stage,
     cancel_run,
     complete_run,
     create_run,
@@ -9,11 +8,11 @@ from products.wizard.backend.logic.runs.lifecycle import (
     list_runs,
     start_run,
     transition_run,
+    update_run_stage,
 )
 from products.wizard.backend.logic.runs.validation import validate_git_repository_name
 
 __all__ = [
-    "advance_run_stage",
     "cancel_run",
     "complete_run",
     "create_run",
@@ -23,5 +22,6 @@ __all__ = [
     "list_runs",
     "start_run",
     "transition_run",
+    "update_run_stage",
     "validate_git_repository_name",
 ]

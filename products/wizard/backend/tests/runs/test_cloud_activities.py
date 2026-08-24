@@ -231,7 +231,7 @@ def test_execute_wizard_maps_worker_error(worker_error: Exception, error_type: s
     )
 
     with (
-        patch("products.wizard.backend.temporal.activities.execution.wizard_facade.advance_run_stage"),
+        patch("products.wizard.backend.temporal.activities.execution.wizard_facade.update_run_stage"),
         patch("products.wizard.backend.temporal.activities.execution.wizard_facade.get_run") as get_run,
         patch(
             "products.wizard.backend.temporal.activities.execution.cloud_worker.execute_wizard",
