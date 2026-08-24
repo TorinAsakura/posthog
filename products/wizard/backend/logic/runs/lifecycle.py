@@ -71,7 +71,6 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
 
         existing = store.get_run_by_idempotency_key(params.team_id, params.idempotency_key)
 
-        # review: isnt "if not existing" clearer?
         if existing is not None:
             if store.get_request_fingerprint(params.team_id, existing.id) != request_fingerprint:
                 raise WizardRunIdempotencyConflictError
