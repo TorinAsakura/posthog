@@ -29,6 +29,7 @@ from products.wizard.backend.facade.contracts import (
     WizardSessionDTO,
 )
 from products.wizard.backend.facade.enums import WizardRunErrorCode, WizardRunStage, WizardRunStatus
+from products.wizard.backend.facade.validation import validate_wizard_version as validate_wizard_version_value
 from products.wizard.backend.logic import (
     registry as registry_service,
     runs as run_service,
@@ -161,3 +162,7 @@ def list_run_artifacts(team_id: int, run_id: UUID) -> list[WizardRunArtifactDTO]
 
 def validate_git_repository(repository: str) -> None:
     run_service.validate_git_repository(repository)
+
+
+def validate_wizard_version(wizard_version: object) -> str:
+    return validate_wizard_version_value(wizard_version)

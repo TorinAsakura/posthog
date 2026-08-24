@@ -1,6 +1,7 @@
 from products.wizard.backend.facade.contracts import WizardProgram
 from products.wizard.backend.facade.validation import (
     validate_nonempty_string,
+    validate_pinned_wizard_version,
     validate_program_environments,
     validate_program_id,
     validate_program_ids,
@@ -34,14 +35,18 @@ def program_to_mapping(program: WizardProgram) -> dict[str, object]:
     }
 
 
-def program_from_mapping(value: object, *, allow_legacy_version: bool = False) -> WizardProgram:
+def program_from_mapping(value: object, *, allow_latest_version: bool = False) -> WizardProgram:
     if not isinstance(value, dict) or set(value) != _PROGRAM_FIELDS:
         raise ValueError("Invalid Wizard program")
     return WizardProgram(
         id=validate_program_id(value["id"]),
         name=validate_nonempty_string(value["name"], error="Invalid Wizard program"),
         description=validate_nonempty_string(value["description"], error="Invalid Wizard program"),
-        wizard_version=validate_wizard_version(value["wizard_version"], allow_legacy=allow_legacy_version),
+        wizard_version=(
+            validate_wizard_version(value["wizard_version"])
+            if allow_latest_version
+            else validate_pinned_wizard_version(value["wizard_version"])
+        ),
         command=validate_program_ids(value["command"]),
         tags=validate_program_ids(value["tags"]),
         required_programs=validate_program_ids(value["required_programs"]),

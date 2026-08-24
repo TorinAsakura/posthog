@@ -129,6 +129,7 @@ class CreateWizardRunInput:
     environment: WizardRunEnvironment
     workspace: WizardWorkspace
     program_id: str
+    wizard_version: str | None = None
     idempotency_key: str | None = None
 
 

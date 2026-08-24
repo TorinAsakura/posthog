@@ -128,6 +128,17 @@ class WizardRunCreateRequestSerializer(serializers.Serializer):
         max_length=255,
         help_text="Unique key that makes cloud run creation safe to retry.",
     )
+    wizard_version = serializers.CharField(
+        required=False,
+        allow_blank=False,
+        help_text="Wizard package version to run. Defaults to the backend pin and accepts latest explicitly.",
+    )
+
+    def validate_wizard_version(self, value: str) -> str:
+        try:
+            return wizard_facade.validate_wizard_version(value)
+        except ValueError:
+            raise serializers.ValidationError("Enter an exact semantic version or latest.")
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         if attrs.get("environment") == WizardRunEnvironment.CLOUD.value and not attrs.get("idempotency_key"):
@@ -141,6 +152,7 @@ class WizardRunCreateRequestSerializer(serializers.Serializer):
             environment=WizardRunEnvironment(cast(str, self.validated_data["environment"])),
             workspace=cast(WizardWorkspace, self.validated_data["workspace"]),
             program_id=cast(str, self.validated_data["program_id"]),
+            wizard_version=cast(str | None, self.validated_data.get("wizard_version")),
             idempotency_key=cast(str | None, self.validated_data.get("idempotency_key")),
         )
 

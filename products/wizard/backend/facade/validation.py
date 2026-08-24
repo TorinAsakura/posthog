@@ -1,6 +1,6 @@
 import re
 
-from products.wizard.backend.facade.config import LEGACY_WIZARD_VERSION
+from products.wizard.backend.facade.config import LATEST_WIZARD_VERSION
 from products.wizard.backend.facade.enums import WizardRunEnvironment
 
 _EXACT_WIZARD_VERSION_PATTERN = re.compile(
@@ -23,17 +23,22 @@ def validate_program_id(value: object) -> str:
     return value
 
 
-def validate_wizard_version(value: object, *, allow_legacy: bool = False) -> str:
-    if allow_legacy and value == LEGACY_WIZARD_VERSION:
-        return LEGACY_WIZARD_VERSION
+def validate_pinned_wizard_version(value: object) -> str:
     if not isinstance(value, str) or _EXACT_WIZARD_VERSION_PATTERN.fullmatch(value) is None:
         raise ValueError("Invalid Wizard program")
+
     return value
+
+
+def validate_wizard_version(value: object) -> str:
+    if value == LATEST_WIZARD_VERSION:
+        return LATEST_WIZARD_VERSION
+    return validate_pinned_wizard_version(value)
 
 
 def is_executable_wizard_version(value: object) -> bool:
     try:
-        validate_wizard_version(value, allow_legacy=True)
+        validate_wizard_version(value)
     except ValueError:
         return False
     return True

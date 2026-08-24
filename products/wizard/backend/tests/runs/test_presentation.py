@@ -103,6 +103,36 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertEqual(response.json()["attr"], "program_id")
         self.assertEqual(response.json()["code"], "required")
 
+    def test_create_accepts_explicit_wizard_version(self) -> None:
+        response = self.client.post(
+            self._url(),
+            {
+                "program_id": "posthog-integration",
+                "wizard_version": "latest",
+                "environment": "local",
+                "workspace": {"type": "local_folder", "project_name": "example-project"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["program"]["wizard_version"], "latest")
+
+    def test_create_rejects_invalid_wizard_version(self) -> None:
+        response = self.client.post(
+            self._url(),
+            {
+                "program_id": "posthog-integration",
+                "wizard_version": "next",
+                "environment": "local",
+                "workspace": {"type": "local_folder", "project_name": "example-project"},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["attr"], "wizard_version")
+
     def test_create_rejects_unavailable_program(self) -> None:
         with patch("posthoganalytics.get_feature_flag_payload", return_value={"version": 1, "programs": []}):
             response = self.client.post(

@@ -79,7 +79,7 @@ def test_program_persisted_deserialization_accepts_legacy_wizard_version() -> No
     with pytest.raises(ValueError):
         program_from_mapping(persisted_value)
 
-    assert program_from_mapping(persisted_value, allow_legacy_version=True).wizard_version == "latest"
+    assert program_from_mapping(persisted_value, allow_latest_version=True).wizard_version == "latest"
 
 
 @parameterized.expand(

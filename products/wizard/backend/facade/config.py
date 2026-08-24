@@ -1,6 +1,6 @@
 from datetime import timedelta
 
 DEFAULT_WIZARD_VERSION = "2.60.0"
-LEGACY_WIZARD_VERSION = "latest"
+LATEST_WIZARD_VERSION = "latest"
 WIZARD_REGISTRY_VERSION = 1
 WIZARD_RUN_DEADLINE = timedelta(minutes=85)

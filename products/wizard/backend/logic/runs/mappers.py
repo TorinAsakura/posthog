@@ -39,7 +39,7 @@ def run_from_record(run: WizardRun) -> WizardRunDTO:
         created_by_id=run.created_by_id,
         environment=WizardRunEnvironment(run.environment),
         workspace=workspace_from_record(run.workspace_type, run.workspace),
-        program=program_from_mapping(run.program, allow_legacy_version=True),
+        program=program_from_mapping(run.program, allow_latest_version=True),
         status=WizardRunStatus(run.status),
         error_code=WizardRunErrorCode(run.error_code) if run.error_code else None,
         error_message=run.error_message,

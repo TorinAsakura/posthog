@@ -1,4 +1,5 @@
 import logging
+from dataclasses import replace
 from functools import partial
 from uuid import UUID
 
@@ -78,6 +79,9 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
         distinct_id=user.distinct_id,
         organization_id=str(team.organization_id),
     )
+
+    if params.wizard_version is not None:
+        program = replace(program, wizard_version=params.wizard_version)
 
     if params.environment not in program.supported_environments:
         raise WizardProgramEnvironmentNotSupportedError
