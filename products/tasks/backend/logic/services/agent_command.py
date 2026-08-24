@@ -104,7 +104,25 @@ def _get_sandbox_url_and_token(task_run: Any) -> tuple[str | None, str | None]:
     return state.get("sandbox_url"), state.get("sandbox_connect_token")
 
 
-def sandbox_transport_token(state: dict[str, Any] | None) -> tuple[str | None, str]:
+def _is_hogland_sandbox_url(sandbox_url: str | None) -> bool:
+    """Whether ``sandbox_url`` points at the configured hogland control plane.
+
+    The hogland bearer is an account-wide credential, so it must only ever be
+    attached to a request bound for the real hogland host. Gating on the URL host
+    (not the mutable ``sandbox_backend`` state flag) means a forged run state
+    cannot redirect the credential to an attacker-controlled server, even on the
+    ``send_agent_command`` path whose SSRF check permits arbitrary public hosts.
+    """
+    hogland_api_url = getattr(settings, "HOGLAND_API_URL", None)
+    if not sandbox_url or not hogland_api_url:
+        return False
+    try:
+        return urlparse(sandbox_url).hostname == urlparse(hogland_api_url).hostname
+    except Exception:
+        return False
+
+
+def sandbox_transport_token(state: dict[str, Any] | None, sandbox_url: str | None = None) -> tuple[str | None, str]:
     """(token, query_param_name) for the sandbox tunnel/proxy layer.
 
     Modal mints a per-sandbox connect token that is persisted in ``TaskRun.state``.
@@ -112,8 +130,13 @@ def sandbox_transport_token(state: dict[str, Any] | None) -> tuple[str | None, s
     bearer — a rotating projected ServiceAccount JWT read fresh per request (the
     static token is the local-dev fallback) — attached here at request time so it
     never touches persisted state or Temporal payloads.
+
+    The hogland bearer is only returned when ``sandbox_url`` is the configured
+    hogland host. That host check, not the ``sandbox_backend`` state flag, is what
+    authorizes attaching an account-wide credential — ``sandbox_backend`` /
+    ``sandbox_url`` are also protected run-state keys, so this is defense in depth.
     """
-    if (state or {}).get("sandbox_backend") == "hogland":
+    if (state or {}).get("sandbox_backend") == "hogland" and _is_hogland_sandbox_url(sandbox_url):
         # Deferred: hogland_sandbox pulls in the hogland SDK + httpx, which every
         # non-hogland caller of this module would otherwise pay for.
         from products.tasks.backend.logic.services.hogland_sandbox import get_hogland_api_token  # noqa: PLC0415
@@ -171,7 +194,7 @@ def send_agent_command(
             When omitted, connect_token is used directly as Authorization.
     """
     sandbox_url, _ = _get_sandbox_url_and_token(task_run)
-    connect_token, token_param = sandbox_transport_token(task_run.state)
+    connect_token, token_param = sandbox_transport_token(task_run.state, sandbox_url)
     if not sandbox_url:
         return CommandResult(
             success=False,

@@ -448,20 +448,38 @@ class TestSendRefreshSession:
         assert REFRESH_SESSION_METHOD == "_posthog/refresh_session"
 
 
+_HOGLAND_URL = "https://hogland.prod-us.posthog.dev"
+_HOGLAND_SANDBOX_URL = f"{_HOGLAND_URL}/v1/hogboxes/hb-1/proxy/8080"
+
+
 class TestSandboxTransportToken:
-    @override_settings(HOGLAND_API_TOKEN="hog-tok")
+    @override_settings(HOGLAND_API_TOKEN="hog-tok", HOGLAND_API_URL=_HOGLAND_URL)
     def test_hogland_runs_use_the_backend_bearer_as_a_query_param(self):
-        token, param = sandbox_transport_token({"sandbox_backend": "hogland", "sandbox_connect_token": "stale"})
+        token, param = sandbox_transport_token(
+            {"sandbox_backend": "hogland", "sandbox_connect_token": "stale"}, _HOGLAND_SANDBOX_URL
+        )
         assert (token, param) == ("hog-tok", "token")
+
+    @override_settings(HOGLAND_API_TOKEN="hog-tok", HOGLAND_API_URL=_HOGLAND_URL)
+    def test_hogland_bearer_is_withheld_when_the_url_is_not_the_hogland_host(self):
+        # A forged sandbox_backend must not send the account bearer to an
+        # arbitrary host — the URL host, not the state flag, authorizes it.
+        token, param = sandbox_transport_token(
+            {"sandbox_backend": "hogland", "sandbox_connect_token": "modal-tok"},
+            "https://attacker.example/steal",
+        )
+        assert (token, param) == ("modal-tok", "_modal_connect_token")
 
     def test_hogland_runs_read_the_rotating_token_file_fresh_per_request(self, tmp_path):
         token_path = tmp_path / "token"
         token_path.write_text("rotated-1\n")
         state = {"sandbox_backend": "hogland"}
-        with override_settings(HOGLAND_API_TOKEN="static-tok", HOGLAND_API_TOKEN_FILE=str(token_path)):
-            first = sandbox_transport_token(state)
+        with override_settings(
+            HOGLAND_API_TOKEN="static-tok", HOGLAND_API_TOKEN_FILE=str(token_path), HOGLAND_API_URL=_HOGLAND_URL
+        ):
+            first = sandbox_transport_token(state, _HOGLAND_SANDBOX_URL)
             token_path.write_text("rotated-2\n")
-            second = sandbox_transport_token(state)
+            second = sandbox_transport_token(state, _HOGLAND_SANDBOX_URL)
         assert first == ("rotated-1", "token")
         assert second == ("rotated-2", "token")
 

@@ -152,7 +152,7 @@ async def _relay_sandbox_events(input: RelaySandboxEventsInput, *, finalize_stre
         "Authorization": f"Bearer {connection_token}",
         "Accept": "text/event-stream",
     }
-    transport_token, token_param = sandbox_transport_token(task_run.state)
+    transport_token, token_param = sandbox_transport_token(task_run.state, input.sandbox_url)
     params: dict[str, str] = {}
     if transport_token:
         params[token_param] = transport_token

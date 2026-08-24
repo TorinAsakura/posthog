@@ -2115,6 +2115,13 @@ _PROTECTED_RUN_STATE_KEYS = frozenset(
         "repositories",
         "verified_pr_urls",
         "sandbox_id",
+        # Sandbox connection state is written only by the provisioning activity. A PATCHable
+        # sandbox_backend/sandbox_url would let a task controller point the account-wide hogland
+        # bearer (or the connect token) at an arbitrary server, so it stays server-owned.
+        "sandbox_backend",
+        "sandbox_url",
+        "sandbox_connect_token",
+        "sandbox_jwt_kid",
         "sandbox_cpu_cores",
         "sandbox_memory_gb",
         "sandbox_ttl_seconds",
@@ -4149,7 +4156,7 @@ def get_task_run_sandbox_connection(
     )
 
     connection_token = _create(task_run=run, user_id=user_id, distinct_id=distinct_id)
-    transport_token, token_param = sandbox_transport_token(run.state)
+    transport_token, token_param = sandbox_transport_token(run.state, run_state.sandbox_url)
     return contracts.TaskRunSandboxConnectionDTO(
         sandbox_url=run_state.sandbox_url,
         sandbox_connect_token=transport_token,
