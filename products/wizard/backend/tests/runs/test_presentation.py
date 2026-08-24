@@ -218,11 +218,11 @@ class TestWizardRunViewSet(APIBaseTest):
         integration_id = None if scenario == "missing_integration" else 123
         with (
             patch(
-                "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+                "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
                 return_value=integration_id,
             ),
             patch(
-                "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+                "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
                 return_value=False,
             ),
         ):
@@ -241,11 +241,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertEqual(response.json()["detail"], "Connect GitHub with access to this repository, then try again.")
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_rejects_a_second_active_run(self, _resolve_integration, _repository_accessible) -> None:
@@ -261,11 +261,11 @@ class TestWizardRunViewSet(APIBaseTest):
         )
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     @override_settings(WIZARD_CLOUD_RUN_OAUTH_CLIENT_ID="")
@@ -285,11 +285,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertFalse(WizardRun.objects.for_team(self.team.id).exists())
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_rejects_automated_token(self, _resolve_integration, _repository_accessible) -> None:
@@ -310,11 +310,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertFalse(WizardRun.objects.for_team(self.team.id).exists())
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_requires_idempotency_key(self, _resolve_integration, _repository_accessible) -> None:
@@ -325,11 +325,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertFalse(WizardRun.objects.for_team(self.team.id).exists())
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_replays_matching_idempotent_request(self, _resolve_integration, _repository_accessible) -> None:
@@ -344,11 +344,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertEqual(WizardRun.objects.for_team(self.team.id).count(), 1)
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_rejects_reused_idempotency_key_for_different_request(
@@ -371,11 +371,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertEqual(WizardRun.objects.for_team(self.team.id).count(), 1)
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_can_be_cancelled(self, _resolve_integration, _repository_accessible) -> None:
@@ -530,11 +530,11 @@ class TestWizardRunViewSet(APIBaseTest):
         self.assertEqual(wizard_facade.get_run(self.team.id, UUID(created["id"])).status, WizardRunStatus.RUNNING)
 
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
         return_value=True,
     )
     @patch(
-        "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+        "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
         return_value=123,
     )
     def test_cloud_run_rejects_non_cancellation_transition(self, _resolve_integration, _repository_accessible) -> None:

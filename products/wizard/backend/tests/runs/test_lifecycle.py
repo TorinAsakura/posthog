@@ -29,11 +29,11 @@ def _create_local_run(team_id: int, user_id: int) -> WizardRunDTO:
 def _create_cloud_run(team_id: int, user_id: int) -> WizardRunDTO:
     with (
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=123,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
     ):

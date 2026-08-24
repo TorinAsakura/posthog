@@ -36,11 +36,11 @@ def test_execute_wizard_uses_persisted_program_snapshot(team, user) -> None:
     with (
         patch("posthoganalytics.get_feature_flag_payload", return_value=registry_payload),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=123,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
         patch("products.wizard.backend.logic.runs.lifecycle.enqueue_dispatch"),

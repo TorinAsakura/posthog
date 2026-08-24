@@ -62,11 +62,11 @@ def _create_cloud_run(
     with (
         patch("posthoganalytics.get_feature_flag_payload", return_value=registry_payload),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=123,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
     ):
@@ -168,11 +168,11 @@ def test_clone_repository_rechecks_access_before_preparing_workspace(team, user)
 
     with (
         patch(
-            "products.wizard.backend.temporal.activities.workspace.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=456,
         ) as resolve_integration,
         patch(
-            "products.wizard.backend.temporal.activities.workspace.repo_selection.repository_accessible_via_integration",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ) as repository_accessible,
         patch(
@@ -201,7 +201,7 @@ def test_clone_repository_rejects_access_revoked_after_creation(team, user) -> N
 
     with (
         patch(
-            "products.wizard.backend.temporal.activities.workspace.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=None,
         ),
         patch("products.wizard.backend.temporal.activities.workspace.cloud_worker.clone_repository") as clone,

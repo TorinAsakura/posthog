@@ -7,7 +7,6 @@ from django.db import transaction as database_transaction
 
 from posthog.models import Team, User
 
-from products.tasks.backend.facade import repo_selection
 from products.wizard.backend.facade.contracts import (
     CreateWizardRunInput,
     GitRepositoryWorkspace,
@@ -26,9 +25,7 @@ from products.wizard.backend.facade.enums import (
 from products.wizard.backend.facade.errors import (
     IllegalStatusTransitionError,
     InvalidWorkspaceEnvironmentError,
-    MissingGitHubIntegrationError,
     MissingWizardRunIdempotencyKeyError,
-    RepositoryNotAccessibleError,
     WizardProgramEnvironmentNotSupportedError,
     WizardRunIdempotencyConflictError,
 )
@@ -40,8 +37,8 @@ from products.wizard.backend.logic.runs import (
 from products.wizard.backend.logic.runs.admission import enforce_cloud_run_creation_policy
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
 from products.wizard.backend.logic.runs.queue import enqueue_dispatch
+from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
 from products.wizard.backend.logic.runs.transitions import transition
-from products.wizard.backend.logic.runs.validation import validate_git_repository_name
 from products.wizard.backend.observability import service as run_observability
 
 logger = logging.getLogger(__name__)
@@ -92,28 +89,15 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
     if params.environment not in program.supported_environments:
         raise WizardProgramEnvironmentNotSupportedError
 
-    # review: this could be extract into a function?
     if isinstance(params.workspace, GitRepositoryWorkspace):
-        validate_git_repository_name(params.workspace.repository)
-
-        integration_id = repo_selection.resolve_team_github_integration_id(params.team_id)
-
-        if integration_id is None:
-            raise MissingGitHubIntegrationError
-
-        if not repo_selection.repository_accessible_via_integration(
-            params.team_id,
-            integration_id,
-            params.workspace.repository,
-        ):
-            raise RepositoryNotAccessibleError
+        authorize_git_repository_access(params.team_id, params.workspace.repository)
 
     initial_status = (
         WizardRunStatus.RUNNING if params.environment == WizardRunEnvironment.LOCAL else WizardRunStatus.CREATED
     )
 
     with database_transaction.atomic():
-        if params.environment == WizardRunEnvironment.CLOUD:
+        if is_cloud_run:
             enforce_cloud_run_creation_policy(params.team_id, params.created_by_id, params.idempotency_key)
 
         result = store.create_run(
@@ -133,6 +117,9 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
         should_dispatch_wizard_run = is_cloud_run and result.created
 
         if should_dispatch_wizard_run:
+            # ☁️ dispatch point for cloud wizard runs
+            # 1. adds to a celery queue
+            # 2. it runs the temporal workflow
             database_transaction.on_commit(
                 partial(
                     _enqueue_cloud_run,
@@ -142,7 +129,7 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
                 robust=True,
             )
 
-    if params.environment == WizardRunEnvironment.CLOUD:
+    if is_cloud_run:
         result = WizardRunCreationResult(run=store.get_run(params.team_id, result.run.id), created=result.created)
 
     if result.created:

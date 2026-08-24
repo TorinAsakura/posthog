@@ -27,11 +27,11 @@ async def _run_activity(input: WizardRunFinalizationActivityInput) -> None:
 def test_finalize_run_is_retry_safe(team, user, status: WizardRunStatus, error_code: WizardRunErrorCode | None) -> None:
     with (
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.resolve_team_github_integration_id",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
             return_value=123,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.repo_selection.repository_accessible_via_integration",
+            "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
     ):

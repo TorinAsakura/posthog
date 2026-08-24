@@ -3,7 +3,6 @@ from temporalio.exceptions import ApplicationError
 
 from posthog.temporal.common.utils import asyncify
 
-from products.tasks.backend.facade import repo_selection
 from products.wizard.backend.facade import api as wizard_facade
 from products.wizard.backend.facade.contracts import GitRepositoryWorkspace, WizardRunDTO
 from products.wizard.backend.facade.enums import (
@@ -12,11 +11,17 @@ from products.wizard.backend.facade.enums import (
     WizardRunStatus,
     WizardWorkspaceType,
 )
+from products.wizard.backend.facade.errors import (
+    InvalidRepositoryError,
+    MissingGitHubIntegrationError,
+    RepositoryNotAccessibleError,
+)
 from products.wizard.backend.logic.runs import (
     worker as cloud_worker,
     worker_lifecycle,
     worker_store,
 )
+from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
 from products.wizard.backend.logic.runs.worker import GitRepositoryCloneRequest, WizardWorkerProvisionRequest
 from products.wizard.backend.temporal.activities.errors import (
     WIZARD_REPOSITORY_ACCESS_ERROR_TYPE,
@@ -87,17 +92,14 @@ def clone_repository(input: ProvisionedWizardWorker) -> PreparedGitRepositoryWor
             non_retryable=True,
         )
 
-    integration_id = repo_selection.resolve_team_github_integration_id(input.team_id)
-    if integration_id is None or not repo_selection.repository_accessible_via_integration(
-        input.team_id,
-        integration_id,
-        run.workspace.repository,
-    ):
+    try:
+        integration_id = authorize_git_repository_access(input.team_id, run.workspace.repository)
+    except (InvalidRepositoryError, MissingGitHubIntegrationError, RepositoryNotAccessibleError) as error:
         raise ApplicationError(
             "GitHub access to the Wizard run repository is unavailable.",
             type=WIZARD_REPOSITORY_ACCESS_ERROR_TYPE,
             non_retryable=True,
-        )
+        ) from error
 
     try:
         root_path = cloud_worker.clone_repository(
