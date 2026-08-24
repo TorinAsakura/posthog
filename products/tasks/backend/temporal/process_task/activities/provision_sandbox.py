@@ -55,7 +55,7 @@ from products.tasks.backend.logic.services.sandbox import (
     SandboxBase,
     SandboxConfig,
     SandboxTemplate,
-    get_sandbox_class_for_backend,
+    get_sandbox_class_for_run_backend,
     get_sandbox_class_for_sandbox_id,
     sandbox_repo_path,
     workload_for_origin_product,
@@ -689,7 +689,7 @@ def prepare_sandbox_for_repository(input: PrepareSandboxForRepositoryInput) -> P
             custom_image_name=ctx.custom_image_name if ctx.use_modal_vm_sandbox else None,
         )
 
-        sandbox_class = get_sandbox_class_for_backend(ctx.sandbox_backend)
+        sandbox_class = get_sandbox_class_for_run_backend(ctx.sandbox_backend)
         return PrepareSandboxForRepositoryOutput(
             sandbox_name=get_sandbox_name_for_task(ctx.task_id),
             repository=repository,
@@ -785,7 +785,7 @@ def _create_sandbox_for_repository(input: CreateSandboxForRepositoryInput) -> Cr
                 runtime=runtime,
                 sandbox_backend=sandbox_backend,
             ) as sandbox_creation_timer:
-                sandbox = get_sandbox_class_for_backend(ctx.sandbox_backend).create(config)
+                sandbox = get_sandbox_class_for_run_backend(ctx.sandbox_backend).create(config)
                 # The provider's TTL clock starts here — the usage ledger anchors its
                 # kill deadline on this boundary, not on when the row is opened below.
                 sandbox_created_at = timezone.now()
@@ -885,7 +885,7 @@ def _create_sandbox_for_repository(input: CreateSandboxForRepositoryInput) -> Cr
 
 @activity.defn
 async def create_sandbox_for_repository(input: CreateSandboxForRepositoryInput) -> CreateSandboxForRepositoryOutput:
-    sandbox_class = get_sandbox_class_for_backend(input.context.sandbox_backend)
+    sandbox_class = get_sandbox_class_for_run_backend(input.context.sandbox_backend)
     if not sandbox_class.supports_creation_cancellation:
         return await _create_sandbox_for_repository(input)
 
