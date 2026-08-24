@@ -119,9 +119,11 @@ def mark_dispatch_failed(team_id: int, run_id: UUID) -> None:
 
 def set_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
     run = _get_run_record(team_id, run_id)
+
     run.stage = stage.value
     run.stage_started_at = timezone.now()
     run.save(update_fields=["stage", "stage_started_at", "updated_at"])
+
     return run_from_record(run)
 
 
