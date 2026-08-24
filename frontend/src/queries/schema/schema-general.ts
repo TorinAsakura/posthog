@@ -141,6 +141,7 @@ export enum NodeKind {
     WebStatsTableQuery = 'WebStatsTableQuery',
     WebExternalClicksTableQuery = 'WebExternalClicksTableQuery',
     WebBotsTableQuery = 'WebBotsTableQuery',
+    WebAgentAnalyticsQuery = 'WebAgentAnalyticsQuery',
     WebGoalsQuery = 'WebGoalsQuery',
     WebVitalsQuery = 'WebVitalsQuery',
     WebVitalsPathBreakdownQuery = 'WebVitalsPathBreakdownQuery',
@@ -292,6 +293,7 @@ export type AnyDataNode =
     | MCPToolDescriptionsQuery
     | MCPToolSampleIntentsQuery
     | MCPToolNeighborsQuery
+    | WebAgentAnalyticsQuery
 
 /**
  * @discriminator kind
@@ -425,6 +427,7 @@ export type QuerySchema =
 
     // Property values
     | PropertyValuesQuery
+    | WebAgentAnalyticsQuery
 
 // Keep this, because QuerySchema itself will be collapsed as it is used in other models
 export type QuerySchemaRoot = QuerySchema
@@ -3710,6 +3713,55 @@ export interface WebBotsTableQueryResponse extends AnalyticsQueryResponseBase {
     offset?: integer
 }
 export type CachedWebBotsTableQueryResponse = CachedQueryResponse<WebBotsTableQueryResponse>
+
+export enum WebAgentAnalyticsQueryType {
+    Overview = 'overview',
+    Issues = 'issues',
+    PageRequests = 'page_requests',
+    Transitions = 'transitions',
+    Demand = 'demand',
+    IssueVariants = 'issue_variants',
+    RequestAnatomy = 'request_anatomy',
+    JourneySummary = 'journey_summary',
+    Journeys = 'journeys',
+    JourneyDetail = 'journey_detail',
+}
+
+export enum WebAgentContentGrouping {
+    Exact = 'exact',
+    Normalized = 'normalized',
+}
+
+/** Agent traffic summaries and readiness diagnostics derived from web request events. */
+export interface WebAgentAnalyticsQuery extends WebAnalyticsQueryBase<WebAgentAnalyticsQueryResponse> {
+    kind: NodeKind.WebAgentAnalyticsQuery
+    queryType: WebAgentAnalyticsQueryType
+    includeCrawlers?: boolean
+    includeExcluded?: boolean
+    contentGrouping?: WebAgentContentGrouping
+    navigationWindowMinutes?: integer
+    /** Gap in minutes that ends an inferred journey when no explicit session ID is present. */
+    inactivityWindowMinutes?: integer
+    conversionWindowHours?: integer
+    minimumRequests?: integer
+    llmsTxtUrl?: string
+    limit?: integer
+    offset?: integer
+    intentKey?: string
+    /** Opaque journey identifier returned by the journeys list, used to load one journey's timeline. */
+    journeyKey?: string
+}
+export interface WebAgentAnalyticsQueryResponse extends AnalyticsQueryResponseBase {
+    results: unknown[]
+    types?: unknown[]
+    columns?: unknown[]
+    hogql?: string
+    hasMore?: boolean
+    limit?: integer
+    offset?: integer
+    definitionVersion?: integer
+}
+export type CachedWebAgentAnalyticsQueryResponse = CachedQueryResponse<WebAgentAnalyticsQueryResponse>
 
 export interface WebGoalsQuery extends WebAnalyticsQueryBase<WebGoalsQueryResponse> {
     kind: NodeKind.WebGoalsQuery

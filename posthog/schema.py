@@ -276,6 +276,8 @@ from posthog.schema_enums import (
     UsageMetricFormat as UsageMetricFormat,
     UserProductListReason as UserProductListReason,
     ValueDisplay as ValueDisplay,
+    WebAgentAnalyticsQueryType as WebAgentAnalyticsQueryType,
+    WebAgentContentGrouping as WebAgentContentGrouping,
     WebAnalyticsItemKind as WebAnalyticsItemKind,
     WebAnalyticsOrderByDirection as WebAnalyticsOrderByDirection,
     WebAnalyticsOrderByFields as WebAnalyticsOrderByFields,
@@ -8268,6 +8270,59 @@ class UserProductListItem(BaseModel):
     updated_at: str
 
 
+class WebAgentAnalyticsQueryResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    columns: list | None = None
+    definitionVersion: int | None = None
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hasMore: bool | None = None
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    limit: int | None = None
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    offset: int | None = None
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    types: list | None = None
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
+
+
 class WebAnalyticsExternalSummaryQueryResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -14319,6 +14374,70 @@ class CachedVectorSearchQueryResponse(BaseModel):
         default=None,
         description=("Measured timings for different parts of the query generation process"),
     )
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
+
+
+class CachedWebAgentAnalyticsQueryResponse(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cache_key: str
+    cache_target_age: AwareDatetime | None = None
+    calculation_trigger: str | None = Field(
+        default=None,
+        description=("What triggered the calculation of the query, leave empty if user/immediate"),
+    )
+    columns: list | None = None
+    definitionVersion: int | None = None
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hasMore: bool | None = None
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    is_cached: bool
+    last_refresh: AwareDatetime
+    limit: int | None = None
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    next_allowed_client_refresh: AwareDatetime
+    offset: int | None = None
+    query_metadata: dict[str, Any] | None = None
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list
+    timezone: str
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    types: list | None = None
     used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
         default=None,
         description=("Connector-synced data warehouse sources referenced by this query, if any."),
@@ -23762,6 +23881,59 @@ class QueryResponseAlternative109(BaseModel):
     )
 
 
+class QueryResponseAlternative110(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    columns: list | None = None
+    definitionVersion: int | None = None
+    error: str | None = Field(
+        default=None,
+        description=(
+            "Query error. Returned only if 'explain' or `modifiers.debug` is true. Throws an error otherwise."
+        ),
+    )
+    hasMore: bool | None = None
+    hogql: str | None = Field(default=None, description="Generated HogQL query.")
+    limit: int | None = None
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    offset: int | None = None
+    query_status: QueryStatus | None = Field(
+        default=None,
+        description=("Query status indicates whether next to the provided data, a query is still running."),
+    )
+    resolved_compare_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None,
+        description=("The resolved previous/comparison period date range, when comparing against another period"),
+    )
+    resolved_date_range: ResolvedDateRangeResponse | None = Field(
+        default=None, description="The date range used for the query"
+    )
+    results: list
+    timings: list[QueryTiming] | None = Field(
+        default=None,
+        description=("Measured timings for different parts of the query generation process"),
+    )
+    types: list | None = None
+    used_data_warehouse_sources: list[DataWarehouseSourceUsage] | None = Field(
+        default=None,
+        description=("Connector-synced data warehouse sources referenced by this query, if any."),
+    )
+    warnings: list[DataWarehouseSyncWarning | AccessControlFilterWarning] | None = Field(
+        default=None,
+        description=(
+            "Warnings about data warehouse sources referenced by the query whose"
+            " latest sync failed, is paused, hit a billing limit, or is otherwise"
+            " stale. Results may not reflect current source data. Accumulated"
+            " across every HogQL execution that contributes to this response — so"
+            " insights backed by warehouse tables (Trends, Funnels, etc.) receive"
+            " the same warnings as raw HogQL queries. Also carries access control"
+            " warnings when a system-table query filters out objects the user can't"
+            " access."
+        ),
+    )
+
+
 class RecordingsQueryResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -24297,6 +24469,61 @@ class VectorSearchQueryResponse(BaseModel):
             " access."
         ),
     )
+
+
+class WebAgentAnalyticsQuery(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    aggregation_group_type_index: int | None = Field(
+        default=None,
+        description=("Groups aggregation - not used in Web Analytics but required for type compatibility"),
+    )
+    compareFilter: CompareFilter | None = None
+    contentGrouping: WebAgentContentGrouping | None = None
+    conversionGoal: ActionConversionGoal | CustomEventConversionGoal | None = None
+    conversionWindowHours: int | None = None
+    dataColorTheme: float | None = Field(
+        default=None,
+        description=(
+            "Colors used in the insight's visualization - not used in Web Analytics but required for type compatibility"
+        ),
+    )
+    dateRange: DateRange | None = None
+    doPathCleaning: bool | None = None
+    filterTestAccounts: bool | None = None
+    inactivityWindowMinutes: int | None = Field(
+        default=None,
+        description=("Gap in minutes that ends an inferred journey when no explicit session ID is present."),
+    )
+    includeCrawlers: bool | None = None
+    includeExcluded: bool | None = None
+    includeRevenue: bool | None = None
+    intentKey: str | None = None
+    interval: IntervalType | None = Field(
+        default=None,
+        description=("Interval for date range calculation (affects date_to rounding for hour vs day ranges)"),
+    )
+    journeyKey: str | None = Field(
+        default=None,
+        description=("Opaque journey identifier returned by the journeys list, used to load one journey's timeline."),
+    )
+    kind: Literal["WebAgentAnalyticsQuery"] = "WebAgentAnalyticsQuery"
+    limit: int | None = None
+    llmsTxtUrl: str | None = None
+    minimumRequests: int | None = None
+    modifiers: HogQLQueryModifiers | None = Field(default=None, description="Modifiers used when performing the query")
+    navigationWindowMinutes: int | None = None
+    offset: int | None = None
+    orderBy: list[WebAnalyticsOrderByFields | WebAnalyticsOrderByDirection] | None = None
+    properties: list[EventPropertyFilter | PersonPropertyFilter | SessionPropertyFilter | CohortPropertyFilter]
+    queryType: WebAgentAnalyticsQueryType
+    response: WebAgentAnalyticsQueryResponse | None = None
+    sampling: WebAnalyticsSampling | None = None
+    samplingFactor: float | None = Field(default=None, description="Sampling rate")
+    tags: QueryLogTags | None = None
+    useSessionsTable: bool | None = None
+    version: float | None = Field(default=None, description="version of the node, used for schema migrations")
 
 
 class WebAnalyticsAssistantFilters(BaseModel):
@@ -28881,6 +29108,7 @@ class QueryResponseAlternative(
         | QueryResponseAlternative107
         | QueryResponseAlternative108
         | QueryResponseAlternative109
+        | QueryResponseAlternative110
     ]
 ):
     root: (
@@ -28990,6 +29218,7 @@ class QueryResponseAlternative(
         | QueryResponseAlternative107
         | QueryResponseAlternative108
         | QueryResponseAlternative109
+        | QueryResponseAlternative110
     )
 
 
@@ -29963,6 +30192,7 @@ class HogQLAutocomplete(BaseModel):
         | MCPToolDescriptionsQuery
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
+        | WebAgentAnalyticsQuery
         | None
     ) = Field(
         default=None,
@@ -30077,6 +30307,7 @@ class HogQLMetadata(BaseModel):
         | MCPToolDescriptionsQuery
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
+        | WebAgentAnalyticsQuery
         | None
     ) = Field(
         default=None,
@@ -30220,6 +30451,7 @@ class MaxInsightContext(BaseModel):
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ) = Field(..., discriminator="kind")
     type: Literal["insight"] = "insight"
     variablesOverride: dict[str, HogQLVariable] | None = None
@@ -30358,6 +30590,7 @@ class QueryRequest(BaseModel):
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ) = Field(
         ...,
         description=(
@@ -30488,6 +30721,7 @@ class QuerySchemaRoot(
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ]
 ):
     root: (
@@ -30588,6 +30822,7 @@ class QuerySchemaRoot(
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ) = Field(..., discriminator="kind")
 
 
@@ -30693,6 +30928,7 @@ class QueryUpgradeRequest(BaseModel):
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ) = Field(..., discriminator="kind")
 
 
@@ -30798,6 +31034,7 @@ class QueryUpgradeResponse(BaseModel):
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     ) = Field(..., discriminator="kind")
 
 
@@ -31089,6 +31326,7 @@ class VisualizationArtifactContent(BaseModel):
         | MCPToolSampleIntentsQuery
         | MCPToolNeighborsQuery
         | PropertyValuesQuery
+        | WebAgentAnalyticsQuery
     )
 
 
