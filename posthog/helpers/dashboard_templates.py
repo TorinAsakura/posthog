@@ -7,8 +7,6 @@ from django.db.models import Q
 
 import structlog
 
-from posthog.schema import InsightVizNode
-
 from posthog.constants import ENRICHED_DASHBOARD_INSIGHT_IDENTIFIER
 from posthog.models.scoping import team_scope
 from posthog.models.tag import Tag
@@ -521,6 +519,10 @@ def create_from_template(
             if not query and template_tile.get("filters"):
                 # Pre-query templates carry the tile definition in legacy `filters`, which
                 # _create_tile_for_insight never reads — convert instead of minting a blank insight.
+                from posthog.schema import (  # noqa: PLC0415 — keeps the heavy schema module off the django.setup() path
+                    InsightVizNode,
+                )
+
                 from posthog.hogql_queries.legacy_compatibility.filter_to_query import (  # noqa: PLC0415 — top-level import cycles through posthog.models.filters
                     filter_to_query,
                 )
