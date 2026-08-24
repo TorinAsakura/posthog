@@ -17,8 +17,7 @@ from products.wizard.backend.logic.runs.config import (
 from products.wizard.backend.models import WizardRun
 
 
-# review: what does this do? does it just validates the run? naming implies this will be dispatched somehow. If it's just validation, then it should be more explicit
-def admit_cloud_run(team_id: int, created_by_id: int, idempotency_key: str | None = None) -> None:
+def enforce_cloud_run_creation_policy(team_id: int, created_by_id: int, idempotency_key: str | None = None) -> None:
     Team.objects.select_for_update().only("id").get(id=team_id)
 
     runs = WizardRun.objects.for_team(team_id).filter(

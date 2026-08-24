@@ -37,7 +37,7 @@ from products.wizard.backend.logic.runs import (
     cancellation as cancellation_service,
     store,
 )
-from products.wizard.backend.logic.runs.admission import admit_cloud_run
+from products.wizard.backend.logic.runs.admission import enforce_cloud_run_creation_policy
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
 from products.wizard.backend.logic.runs.queue import enqueue_dispatch
 from products.wizard.backend.logic.runs.transitions import transition
@@ -115,7 +115,7 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
 
     with database_transaction.atomic():
         if params.environment == WizardRunEnvironment.CLOUD:
-            admit_cloud_run(params.team_id, params.created_by_id, params.idempotency_key)
+            enforce_cloud_run_creation_policy(params.team_id, params.created_by_id, params.idempotency_key)
 
         result = store.create_run(
             team_id=params.team_id,
