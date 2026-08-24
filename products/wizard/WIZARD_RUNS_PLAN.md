@@ -80,12 +80,11 @@ presentation
             -> Temporal client
 
 Temporal workflow
-    -> lifecycle activities -> logic/runs/lifecycle.py
     -> Wizard Worker activities
-        -> provision Wizard Worker
+        -> provision Wizard Worker and mark run as running
         -> prepare workspace based on workspace type
         -> execute setup agent
-        -> create Run Artifacts
+        -> create Run Artifacts and mark run as completed
         -> clean up Wizard Worker
         -> logic/runs/worker.py
             -> logic/runs/publishing.py
@@ -93,6 +92,7 @@ Temporal workflow
             -> Tasks repository-selection facade
             -> Tasks repository-publishing facade
         -> facade/api.py -> logic/runs/artifacts.py
+    -> finalization activity for failed or canceled runs -> logic/runs/lifecycle.py
 ```
 
 - `products/wizard/backend/facade/api.py` remains Wizard's only public Python interface.
@@ -258,7 +258,7 @@ This audit covers all Wizard run work completed before the environment and works
 - [x] Create `products/wizard/backend/temporal/contracts.py`.
 - [x] Define a small workflow input containing `team_id` and `run_id`.
 - [x] Create `products/wizard/backend/temporal/workflows/execute_run.py`.
-- [x] Create `products/wizard/backend/temporal/activities/lifecycle.py`.
+- [x] Create one finalization activity for failed and canceled runs.
 - [x] Split workspace preparation, setup agent execution, artifact creation, and worker cleanup into separate activity modules.
 - [x] Create `products/wizard/backend/temporal/client.py`.
 - [x] Register workflows and activities in `products/wizard/backend/temporal/__init__.py`.
@@ -269,7 +269,7 @@ This audit covers all Wizard run work completed before the environment and works
 
 ### 8. Implement the cloud workflow
 
-- [x] Mark the run as running in a lifecycle activity.
+- [x] Mark the run as running during Wizard Worker provisioning.
 - [x] Load the workspace type during Wizard Worker provisioning.
 - [x] Select repository cloning in the workflow from the recorded workspace type.
 - [x] Resolve the current GitHub integration and authorize the repository in the cloning activity.
@@ -280,16 +280,16 @@ This audit covers all Wizard run work completed before the environment and works
 - [x] Clone the repository into a stable sandbox workspace path.
 - [x] Run the npm Wizard in headless mode against the prepared workspace.
 - [x] Apply explicit execution and sandbox TTL timeouts.
-- [x] Clean up the Wizard Worker in `finally` for success, failure, and cancellation.
+- [x] Attempt Wizard Worker cleanup after success, failure, and cancellation without changing a completed run when cleanup fails.
 - [x] Collect a Git diff and persist a Run Artifact reference in the handoff activity.
 - [x] Skip repository publishing when the setup agent produces no changes.
 - [x] Create a signed commit on a deterministic branch for runs with changes.
 - [x] Open or reuse a pull request for the run branch.
 - [x] Persist the pull request as a Run Artifact alongside the Git diff.
-- [x] Complete the run and associate any produced Run Artifacts.
+- [x] Complete the run after the handoff activity persists any produced Run Artifacts.
 - [x] Map sandbox or activity timeout to the timeout error code.
 - [x] Map other execution failures to a typed error code before enabling broad retries.
-- [x] Mark canceled executions as canceled.
+- [x] Finalize canceled executions through the shared terminal-state activity.
 - [x] Avoid retrying irreversible side effects without an idempotency strategy.
 
 ### 9. Dispatch cloud runs

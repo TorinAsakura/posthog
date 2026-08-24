@@ -65,7 +65,10 @@ Cloud creation verifies that the project has a GitHub integration with access to
 The check runs again when execution starts because access can change while a run is queued.
 
 After the database transaction commits, the backend starts a Temporal workflow with only the project ID and run ID.
-The workflow uses activities to persist lifecycle changes and execute the Wizard Worker.
+The provisioning activity marks the run as `running` before it creates the Wizard Worker.
+The handoff activity marks the run as `completed` after it persists the Run Artifacts.
+If a worker activity exhausts its retries or the workflow is canceled, one finalization activity records the terminal state.
+Sandbox cleanup does not change a completed run if cleanup fails.
 
 The Worker:
 
