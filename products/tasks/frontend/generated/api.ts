@@ -1163,7 +1163,7 @@ export const getTaskChannelsOnboardingSessionTestCreateUrl = (projectId: string)
 }
 
 /**
- * Staff-only test path that creates a repeatable session from explicit prompt-building inputs.
+ * Feature-flagged test path that creates a repeatable session from explicit prompt-building inputs.
  * @summary Start a test first-run onboarding session
  */
 export const taskChannelsOnboardingSessionTestCreate = async (
@@ -1202,7 +1202,7 @@ export const getTaskChannelsTeachingCanvasTestCreateUrl = (projectId: string) =>
 }
 
 /**
- * Staff-only test path that resolves or creates the teaching canvas in #general.
+ * Feature-flagged test path that resolves or creates the teaching canvas in #general.
  * @summary Create the teaching canvas for testing
  */
 export const taskChannelsTeachingCanvasTestCreate = async (
