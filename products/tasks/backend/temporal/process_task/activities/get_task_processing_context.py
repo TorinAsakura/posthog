@@ -758,18 +758,21 @@ def _resolve_sandbox_backend(
     Modal-only feature (VM runtime, custom image, Pi runtime, Modal-level network
     allowlist) stays on Modal even with the flag on. Fails closed to Modal.
     """
-    state_override = (state or {}).get("sandbox_backend")
-    if isinstance(state_override, str) and state_override in ("modal", "hogland"):
-        log_with_activity_context(
-            "sandbox_backend_state_override",
-            run_id=run_id,
-            sandbox_backend=state_override,
-        )
-        return state_override
+    raw_override = (state or {}).get("sandbox_backend")
+    override = raw_override if isinstance(raw_override, str) and raw_override in ("modal", "hogland") else None
 
+    # A "modal" override is a kill switch and always wins — forcing Modal is never unsafe.
+    if override == "modal":
+        log_with_activity_context("sandbox_backend_state_override", run_id=run_id, sandbox_backend="modal")
+        return "modal"
+
+    # Hard gates: a "hogland" result (override OR flag) is only allowed when hogland can
+    # actually run this run. These sit ahead of the override so a stale or forged `hogland`
+    # (e.g. carried across a cloud handoff) can't defeat the EU guard or the Modal-only
+    # fallbacks and leave the run with unenforced egress.
     if not settings.HOGLAND_API_URL or not (settings.HOGLAND_API_TOKEN_FILE or settings.HOGLAND_API_TOKEN):
         return "modal"
-    # Hogland runs in the US only; EU runs stay on Modal regardless of flag state.
+    # Hogland runs in the US only; EU runs stay on Modal regardless of flag/override state.
     if getattr(settings, "CLOUD_DEPLOYMENT", None) == "EU":
         return "modal"
     if (
@@ -779,6 +782,11 @@ def _resolve_sandbox_backend(
         or use_modal_network_allowlist
     ):
         return "modal"
+
+    # Past the gates, a "hogland" override pins the run (the canary lever), no flag eval.
+    if override == "hogland":
+        log_with_activity_context("sandbox_backend_state_override", run_id=run_id, sandbox_backend="hogland")
+        return "hogland"
 
     try:
         enabled = bool(

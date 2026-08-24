@@ -2088,6 +2088,11 @@ class TaskRun(models.Model):
         state.pop("sandbox_id", None)
         state.pop("sandbox_url", None)
         state.pop("sandbox_jwt_kid", None)
+        state.pop("sandbox_connect_token", None)
+        # Drop the provider stamp too: the handed-off run re-resolves its backend from
+        # scratch, so a stale `hogland` must not survive to outrank the EU guard, the
+        # Modal-only fallbacks, or the flag kill switch on the next context resolution.
+        state.pop("sandbox_backend", None)
         self.state = state
 
         logger.info(

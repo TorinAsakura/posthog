@@ -1418,3 +1418,27 @@ class TestResolveSandboxBackend:
     @override_settings(**_HOGLAND_SETTINGS)
     def test_state_override_wins_over_the_flag(self, override, flag_enabled, expected):
         assert self._resolve_with_flag(flag_enabled, state={"sandbox_backend": override}) == expected
+
+    @override_settings(**_HOGLAND_SETTINGS, CLOUD_DEPLOYMENT="EU")
+    def test_hogland_override_cannot_defeat_the_eu_guard(self):
+        # A stale/forged hogland override (e.g. surviving a cloud handoff) must not run an
+        # EU run on hogland — the capability gates sit ahead of the override.
+        assert self._resolve_with_flag(True, state={"sandbox_backend": "hogland"}) == "modal"
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"use_modal_vm_sandbox": True},
+            {"custom_image_name": "img"},
+            {"use_modal_network_allowlist": True},
+        ],
+        ids=["vm", "custom_image", "network_allowlist"],
+    )
+    @override_settings(**_HOGLAND_SETTINGS)
+    def test_hogland_override_cannot_defeat_modal_only_fallbacks(self, overrides):
+        assert self._resolve_with_flag(True, state={"sandbox_backend": "hogland"}, **overrides) == "modal"
+
+    @override_settings(**_HOGLAND_SETTINGS)
+    def test_modal_override_still_wins_even_when_hogland_is_available(self):
+        # The kill switch must always work.
+        assert self._resolve_with_flag(True, state={"sandbox_backend": "modal"}) == "modal"

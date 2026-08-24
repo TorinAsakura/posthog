@@ -470,6 +470,20 @@ class TestSandboxTransportToken:
         )
         assert (token, param) == ("modal-tok", "_modal_connect_token")
 
+    @override_settings(HOGLAND_API_TOKEN="hog-tok", HOGLAND_API_URL=_HOGLAND_URL)
+    @pytest.mark.parametrize(
+        "sandbox_url",
+        [
+            "https://hogland.prod-us.posthog.dev:9999/v1/hogboxes/hb-1/proxy/8080",  # wrong port
+            "http://hogland.prod-us.posthog.dev/v1/hogboxes/hb-1/proxy/8080",  # wrong scheme
+            "hogland.prod-us.posthog.dev/v1/hogboxes/hb-1/proxy/8080",  # scheme-less -> hostname None
+        ],
+        ids=["wrong_port", "wrong_scheme", "scheme_less"],
+    )
+    def test_hogland_bearer_is_withheld_on_origin_mismatch(self, sandbox_url):
+        token, param = sandbox_transport_token({"sandbox_backend": "hogland", "sandbox_connect_token": "m"}, sandbox_url)
+        assert (token, param) == ("m", "_modal_connect_token")
+
     def test_hogland_runs_read_the_rotating_token_file_fresh_per_request(self, tmp_path):
         token_path = tmp_path / "token"
         token_path.write_text("rotated-1\n")

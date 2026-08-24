@@ -117,9 +117,18 @@ def _is_hogland_sandbox_url(sandbox_url: str | None) -> bool:
     if not sandbox_url or not hogland_api_url:
         return False
     try:
-        return urlparse(sandbox_url).hostname == urlparse(hogland_api_url).hostname
+        target = urlparse(sandbox_url)
+        expected = urlparse(hogland_api_url)
     except Exception:
         return False
+    # Require an https origin matching the configured host AND port. A scheme-less
+    # HOGLAND_API_URL parses to hostname=None; refusing that stops a None==None match
+    # from attaching the bearer to a scheme-less or mismatched-port sandbox_url.
+    if target.scheme != "https" or expected.scheme != "https":
+        return False
+    if not target.hostname or not expected.hostname:
+        return False
+    return (target.hostname, target.port) == (expected.hostname, expected.port)
 
 
 def sandbox_transport_token(state: dict[str, Any] | None, sandbox_url: str | None = None) -> tuple[str | None, str]:
