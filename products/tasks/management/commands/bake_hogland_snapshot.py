@@ -27,6 +27,8 @@ from django.core.management.base import BaseCommand, CommandError
 import httpx
 from hogland import Hogbox, Hogland
 
+from posthog.dataclasses import frozen
+
 from products.tasks.backend.logic.services.local_skills import LocalSkillsCache, populate_skills_directory
 
 SANDBOX_IMAGES_DIR = Path("products/tasks/backend/sandbox/images")
@@ -80,16 +82,24 @@ EXEC_ENV_DROPIN = "\n".join(
 )
 
 
-def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
-    """(label, script, timeout_seconds) tuples, in execution order."""
+# kw_only off so the ordered step list below stays readable as positional entries.
+@frozen(kw_only=False)
+class _BakeStep:
+    label: str
+    script: str
+    timeout_seconds: int
+
+
+def _bake_steps(agent_version: str) -> list[_BakeStep]:
+    """The ordered shell steps that reconstruct Dockerfile.sandbox-base in a box."""
     return [
-        (
+        _BakeStep(
             "apt packages",
             f"export DEBIAN_FRONTEND=noninteractive && apt-get update && "
             f"apt-get install -y --no-install-recommends {APT_PACKAGES} && rm -rf /var/lib/apt/lists/*",
             15 * 60,
         ),
-        (
+        _BakeStep(
             f"git {GIT_VERSION} from source",
             "set -eux; "
             f'curl -fsSL -o /tmp/git.tar.xz "https://www.kernel.org/pub/software/scm/git/git-{GIT_VERSION}.tar.xz"; '
@@ -101,14 +111,14 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "git help -a | grep -q '[[:space:]]backfill'",
             25 * 60,
         ),
-        (
+        _BakeStep(
             "node 24",
             "curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && "
             "apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
             10 * 60,
         ),
-        ("npm globals", "npm install -g yarn pnpm typescript ts-node nodemon", 10 * 60),
-        (
+        _BakeStep("npm globals", "npm install -g yarn pnpm typescript ts-node nodemon", 10 * 60),
+        _BakeStep(
             "uv + ruff + ty",
             # The Dockerfile takes uv from its pinned official image; without a container
             # runtime we pin the same version's release tarball and verify it against the
@@ -128,7 +138,7 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "ruff --version; ty --version",
             10 * 60,
         ),
-        (
+        _BakeStep(
             f"gh CLI {GH_CLI_VERSION}",
             "set -eux; "
             'arch="$(dpkg --print-architecture)"; '
@@ -137,7 +147,7 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "dpkg -i /tmp/gh.deb && rm /tmp/gh.deb",
             5 * 60,
         ),
-        (
+        _BakeStep(
             f"agentsh {AGENTSH_TAG}",
             "set -eux; "
             f'version="{AGENTSH_TAG.removeprefix("v")}"; '
@@ -154,7 +164,7 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "chmod 777 /var/lib/agentsh /var/lib/agentsh/sessions /var/lib/agentsh/quarantine /var/log/agentsh",
             5 * 60,
         ),
-        (
+        _BakeStep(
             f"rtk {RTK_VERSION}",
             "set -eux; "
             'arch="$(dpkg --print-architecture)"; '
@@ -168,21 +178,21 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "tar -xzf /tmp/rtk.tar.gz -C /usr/local/bin rtk && rm /tmp/rtk.tar.gz && rtk --version",
             5 * 60,
         ),
-        (
+        _BakeStep(
             f"@posthog/agent@{agent_version} in /scripts",
             "set -eux; mkdir -p /scripts && cd /scripts && npm init -y && "
             f'npm install "@posthog/agent@{agent_version}" && '
             "test -x /scripts/node_modules/.bin/agent-server",
             15 * 60,
         ),
-        (
+        _BakeStep(
             "skills install",
             "set -eux; chmod +x /tmp/install-skills.sh; mkdir -p /tmp/skills; "
             "tar -xzf /tmp/skills.tar.gz -C /tmp/skills; "
             "/tmp/install-skills.sh /tmp/skills; rm -rf /tmp/install-skills.sh /tmp/skills /tmp/skills.tar.gz",
             5 * 60,
         ),
-        (
+        _BakeStep(
             "git identity + guards + workspace",
             "set -eux; "
             'git config --global user.email "code@posthog.com"; '
@@ -191,7 +201,7 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             "mkdir -p /tmp/workspace",
             60,
         ),
-        (
+        _BakeStep(
             "exec-daemon env wiring",
             # Make STATIC_ENV plus the per-box /etc/hogbox-env visible to hog-exec's
             # children — this is what gives exec processes the Modal-style container env.
@@ -204,7 +214,7 @@ def _bake_steps(agent_version: str) -> list[tuple[str, str, int]]:
             'systemctl restart "$unit"',
             120,
         ),
-        (
+        _BakeStep(
             "verify",
             "set -eux; python3 --version; node --version; npm --version; "
             "gh --version; rtk --version; agentsh --version; "
@@ -250,13 +260,13 @@ class Command(BaseCommand):
 
         try:
             self._upload_inputs(box, skills_payload)
-            for label, script, timeout in _bake_steps(options["agent_version"]):
-                self.stdout.write(f"--> {label}")
-                result = box.exec(["bash", "-c", script], timeout_seconds=timeout)
+            for step in _bake_steps(options["agent_version"]):
+                self.stdout.write(f"--> {step.label}")
+                result = box.exec(["bash", "-c", step.script], timeout_seconds=step.timeout_seconds)
                 if result.exit_code != 0:
                     self.stderr.write(result.stdout[-4000:])
                     self.stderr.write(result.stderr[-4000:])
-                    raise CommandError(f"Bake step failed: {label} (exit {result.exit_code})")
+                    raise CommandError(f"Bake step failed: {step.label} (exit {result.exit_code})")
 
             self.stdout.write("Snapshotting (pause -> dump -> resume)...")
             record = box.snapshot()
