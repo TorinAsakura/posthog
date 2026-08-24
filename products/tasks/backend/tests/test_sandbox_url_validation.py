@@ -1,4 +1,5 @@
 import pytest
+
 from django.test import override_settings
 
 from products.tasks.backend.presentation.views.api import TaskRunViewSet
