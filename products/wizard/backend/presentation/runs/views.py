@@ -5,7 +5,7 @@ from django.conf import settings
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
-from rest_framework.exceptions import NotFound, PermissionDenied, Throttled, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -16,19 +16,11 @@ from posthog.exceptions import Conflict
 from products.wizard.backend.facade import api as wizard_facade
 from products.wizard.backend.facade.contracts import WizardRunDTO
 from products.wizard.backend.facade.enums import WizardRunEnvironment, WizardRunStatus
-from products.wizard.backend.facade.errors import (
-    ActiveWizardRunError,
-    IllegalStatusTransitionError,
-    InvalidRepositoryError,
-    InvalidWorkspaceEnvironmentError,
-    MissingGitHubIntegrationError,
-    RepositoryNotAccessibleError,
-    WizardProgramEnvironmentNotSupportedError,
-    WizardProgramNotAvailableError,
-    WizardRunDailyLimitError,
-    WizardRunHourlyLimitError,
-    WizardRunIdempotencyConflictError,
-    WizardRunNotFoundError,
+from products.wizard.backend.facade.errors import IllegalStatusTransitionError, WizardRunNotFoundError
+from products.wizard.backend.presentation.runs.errors import (
+    WIZARD_RUN_CREATION_ERRORS,
+    WizardRunCreationError,
+    run_creation_api_error,
 )
 from products.wizard.backend.presentation.runs.pagination import WizardRunPagination
 from products.wizard.backend.presentation.runs.serializers import (
@@ -77,30 +69,8 @@ class WizardRunViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
             self._validate_cloud_creation(request)
         try:
             result = wizard_facade.create_run_with_result(params)
-        # review: this conversion into actual API return codes is good, but this could be extract into a function
-        except InvalidWorkspaceEnvironmentError:
-            raise ValidationError({"detail": "Choose a workspace supported by this run environment."})
-        except InvalidRepositoryError:
-            raise ValidationError({"detail": "Enter a repository in owner/name format."})
-        except WizardProgramNotAvailableError:
-            raise ValidationError({"detail": "Choose an available Wizard program."})
-        except WizardProgramEnvironmentNotSupportedError:
-            raise ValidationError({"detail": "Choose a Wizard program supported by this run environment."})
-        except WizardRunIdempotencyConflictError:
-            raise Conflict(
-                "This idempotency key was already used for a different Wizard run.",
-                code="idempotency_conflict",
-            )
-        except ActiveWizardRunError:
-            raise Throttled(
-                detail="A cloud Wizard run is already active. Wait for it to finish or cancel it before starting another."
-            )
-        except WizardRunHourlyLimitError:
-            raise Throttled(detail="You've reached the hourly cloud run limit. Try again in an hour.")
-        except WizardRunDailyLimitError:
-            raise Throttled(detail="You've reached the daily cloud run limit. Try again tomorrow.")
-        except (MissingGitHubIntegrationError, RepositoryNotAccessibleError):
-            raise ValidationError({"detail": "Connect GitHub with access to this repository, then try again."})
+        except WIZARD_RUN_CREATION_ERRORS as error:
+            raise run_creation_api_error(cast(WizardRunCreationError, error))
 
         response_status = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
 
