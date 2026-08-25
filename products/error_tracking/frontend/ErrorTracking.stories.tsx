@@ -18,7 +18,11 @@ import { TEST_EVENTS } from './__mocks__/events'
 import { results as stackFrameResults } from './__mocks__/stack_frames/batch_get'
 import { BreakdownPreset } from './components/Breakdowns/consts'
 import { miniBreakdownsLogic } from './components/Breakdowns/miniBreakdownsLogic'
-import { issueFilterPreviewLogic, IssueFilterPreview } from './components/IssueFilterPreview/issueFilterPreviewLogic'
+import {
+    issueFilterPreviewLogic,
+    IssueFilterPreview,
+    IssueReleasesViewMode,
+} from './components/IssueFilterPreview/issueFilterPreviewLogic'
 import { computeReleaseBucketing, IssueReleasesQueryRow } from './components/IssueReleases/issueReleases'
 import { errorTrackingIssueSceneLogic } from './scenes/ErrorTrackingIssueScene/errorTrackingIssueSceneLogic'
 
@@ -420,18 +424,21 @@ function IssueScenePreviewStory({
     selectedEventProperties,
     openBreakdown,
     propertyFilter,
+    releasesViewMode,
 }: {
     activePreview: IssueFilterPreview
     selectedEventProperties?: string
     openBreakdown?: BreakdownPreset
     propertyFilter?: { key: string; value: string }
+    releasesViewMode?: IssueReleasesViewMode
 }): JSX.Element {
-    const { applyPropertyFilter, setActivePreview } = useActions(issueFilterPreviewLogic)
+    const { applyPropertyFilter, setActivePreview, setReleasesViewMode } = useActions(issueFilterPreviewLogic)
     const { selectEvent } = useActions(errorTrackingIssueSceneLogic({ id: ISSUE_ID }))
     const { openBreakdownDetails } = useActions(miniBreakdownsLogic({ issueId: ISSUE_ID }))
 
     useLayoutEffect(() => {
         setActivePreview(activePreview)
+        setReleasesViewMode(releasesViewMode ?? 'list')
         if (selectedEventProperties) {
             selectEvent({
                 event: '$exception',
@@ -458,9 +465,11 @@ function IssueScenePreviewStory({
         openBreakdown,
         openBreakdownDetails,
         propertyFilter,
+        releasesViewMode,
         selectEvent,
         selectedEventProperties,
         setActivePreview,
+        setReleasesViewMode,
     ])
 
     return <App />
@@ -525,6 +534,12 @@ export const GroupPageReleases: Story = {
     name: 'Issue scene with releases',
     parameters: { pageUrl: urls.errorTrackingIssue(ISSUE_ID) },
     render: () => <IssueScenePreviewStory activePreview="releases" />,
+}
+
+export const GroupPageReleasesStacked: Story = {
+    name: 'Issue scene with stacked releases',
+    parameters: { pageUrl: urls.errorTrackingIssue(ISSUE_ID) },
+    render: () => <IssueScenePreviewStory activePreview="releases" releasesViewMode="stacked" />,
 }
 
 export const GroupPageBreakdownLoading: Story = {
