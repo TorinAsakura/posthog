@@ -1806,21 +1806,12 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       return { stopReason: "end_turn" };
     }
 
-    return this.performClear(params, session);
-  }
-
-  /** Body of {@link clearConversation}; claims `session.querySwap` for the
-   *  swap via {@link withQuerySwap}. */
-  private performClear(
-    params: PromptRequest,
-    session: Session,
-  ): Promise<PromptResponse> {
     return this.withQuerySwap(session, () =>
-      this.performClearClaimed(params, session),
+      this.performClear(params, session),
     );
   }
 
-  private async performClearClaimed(
+  private async performClear(
     params: PromptRequest,
     session: Session,
   ): Promise<PromptResponse> {
@@ -2155,9 +2146,8 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
     );
   }
 
-  /** Body of {@link refreshSession}; claims `session.querySwap` via
-   *  {@link withQuerySwap} so a prompt, cancel, /clear, or second refresh
-   *  arriving mid-swap can't race the session-field rewrite. */
+  /** Body of {@link refreshSession}; see {@link withQuerySwap} for the claim
+   *  contract. */
   private async performRefresh(
     prev: Session,
     mcpServers: Record<string, McpServerConfig>,
@@ -2167,44 +2157,49 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       sessionId: this.sessionId,
     });
 
-    await this.retireQuery(prev);
-
-    // Reuse every option from the running session; swap mcpServers, re-root
-    // identity on `resume` instead of `sessionId`, and give the new Query a
-    // fresh AbortController.
-    const newAbortController = new AbortController();
-    const { sessionId: _drop, ...rest } = prev.queryOptions;
-
-    // Rebuild the in-process ("sdk") server fresh; reusing the prior instance
-    // throws "Already connected to a transport" and drops the signed-commit tools.
-    const freshInProcess = prev.buildInProcessMcpServers();
-    if (Object.keys(freshInProcess).length > 0) {
-      this.logger.info("Rebuilt in-process MCP servers on refresh", {
-        sessionId: this.sessionId,
-        servers: Object.keys(freshInProcess),
-      });
-    }
-
-    const newOptions: Options = {
-      ...rest,
-      mcpServers: { ...mcpServers, ...freshInProcess },
-      resume: prev.sdkSessionId,
-      forkSession: false,
-      abortController: newAbortController,
-      // `rest.model` is the creation-time value; the user may have switched
-      // models since, so re-root the new Query on the live session model.
-      ...(prev.modelId && { model: toSdkModelId(prev.modelId) }),
-    };
-
-    const newInput = new Pushable<SDKUserMessage>();
-    const newQuery = query({ prompt: newInput, options: newOptions });
-
-    prev.query = newQuery;
-    prev.input = newInput;
-    prev.queryOptions = newOptions;
-    prev.abortController = newAbortController;
-
+    // Declared outside the try so the catch can tear down a half-built
+    // replacement; assigned inside, where retireQuery also runs so a failure
+    // anywhere in the swap gets the same close-out (mirrors performClear).
+    let newQuery: Query | undefined;
+    let newAbortController: AbortController | undefined;
     try {
+      await this.retireQuery(prev);
+
+      // Reuse every option from the running session; swap mcpServers, re-root
+      // identity on `resume` instead of `sessionId`, and give the new Query a
+      // fresh AbortController.
+      newAbortController = new AbortController();
+      const { sessionId: _drop, ...rest } = prev.queryOptions;
+
+      // Rebuild the in-process ("sdk") server fresh; reusing the prior instance
+      // throws "Already connected to a transport" and drops the signed-commit tools.
+      const freshInProcess = prev.buildInProcessMcpServers();
+      if (Object.keys(freshInProcess).length > 0) {
+        this.logger.info("Rebuilt in-process MCP servers on refresh", {
+          sessionId: this.sessionId,
+          servers: Object.keys(freshInProcess),
+        });
+      }
+
+      const newOptions: Options = {
+        ...rest,
+        mcpServers: { ...mcpServers, ...freshInProcess },
+        resume: prev.sdkSessionId,
+        forkSession: false,
+        abortController: newAbortController,
+        // `rest.model` is the creation-time value; the user may have switched
+        // models since, so re-root the new Query on the live session model.
+        ...(prev.modelId && { model: toSdkModelId(prev.modelId) }),
+      };
+
+      const newInput = new Pushable<SDKUserMessage>();
+      newQuery = query({ prompt: newInput, options: newOptions });
+
+      prev.query = newQuery;
+      prev.input = newInput;
+      prev.queryOptions = newOptions;
+      prev.abortController = newAbortController;
+
       const result = await withTimeout(
         newQuery.initializationResult(),
         SESSION_VALIDATION_TIMEOUT_MS,
@@ -2216,11 +2211,14 @@ export class ClaudeAcpAgent extends BaseAcpAgent {
       }
     } catch (error) {
       // The old query is already retired and the new one is unproven, so any
-      // failure here — timeout or SDK init rejection — leaves the session
-      // unusable. Tear down the unproven replacement and close the session
-      // out (same as performClear) rather than leaving it half-swapped:
-      // queryClosed gates every later prompt into SESSION_ENDED.
-      this.terminateQuery(newQuery, newAbortController);
+      // failure here — retireQuery, timeout, or SDK init rejection — leaves
+      // the session unusable. Tear down any replacement that was allocated
+      // and close the session out (same as performClear) rather than leaving
+      // it half-swapped: queryClosed gates every later prompt into
+      // SESSION_ENDED.
+      if (newQuery && newAbortController) {
+        this.terminateQuery(newQuery, newAbortController);
+      }
       prev.queryClosed = true;
       const message = error instanceof Error ? error.message : String(error);
       throw new RequestError(-32603, message, { sessionId: this.sessionId });

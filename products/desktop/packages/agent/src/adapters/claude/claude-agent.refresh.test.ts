@@ -261,7 +261,7 @@ describe("ClaudeAcpAgent.extMethod refresh_session", () => {
     vi.useFakeTimers();
     try {
       const { agent } = makeAgent();
-      installFakeSession(agent, "s-timeout");
+      const { session } = installFakeSession(agent, "s-timeout");
       // Never resolves — withTimeout must win the race.
       nextInitPromise = new Promise<InitResult>(() => {});
 
@@ -280,6 +280,11 @@ describe("ClaudeAcpAgent.extMethod refresh_session", () => {
       await expect(promise).rejects.toThrow(/Session refresh timed out after/);
       // The new query is closed so its CLI subprocess does not leak.
       expect(createdQueries[0]?.close).toHaveBeenCalledTimes(1);
+      // The session is closed too, so a later prompt rejects SESSION_ENDED
+      // instead of pushing into the retired input stream.
+      expect((session as unknown as { queryClosed: boolean }).queryClosed).toBe(
+        true,
+      );
     } finally {
       vi.useRealTimers();
     }
