@@ -218,8 +218,11 @@ class HoglandSandbox(AgentServerLaunchMixin):
                 # inherit the golden snapshot's machine config (a mismatch is a 400).
                 # Per-task resource overrides are therefore unsupported on hogland.
                 snapshot_id=snapshot_alias,
-                # No shell ingress: the box is driven via exec / files / proxy. Without this
-                # hogplane defaults to ssh-public, opening a public port + DNAT per box.
+                # Explicit and defensive: a restore inherits the snapshot's access_type,
+                # and the key-less golden bake is stamped "none", so task boxes already
+                # restore as "none". Passing it here just pins that intent. Note "none"
+                # still allocates a port + DNAT, so it does not remove ingress; the box is
+                # driven via exec / files / proxy regardless.
                 access_type="none",
                 # Non-empty names must be unique per owner; suffix like the Modal backend.
                 name=f"{config.name}-{uuid.uuid4().hex[:6]}"[:64],
@@ -252,13 +255,21 @@ class HoglandSandbox(AgentServerLaunchMixin):
                 "Hogland sandbox ignores per-task resource overrides; using the golden snapshot's machine config",
                 extra={"sandbox_id": box.id, "cpu_cores": config.cpu_cores, "memory_gb": config.memory_gb},
             )
-        # Price the usage ledger on the shape the box actually delivered, read back from the
-        # box spec — not the requested golden constants. A golden snapshot rebaked at a
-        # different shape would otherwise desync every ledger row against a pinned constant.
+        # Price the usage ledger on the shape the box actually delivered, read back from
+        # the box spec, not the requested golden constants. A restored box always reports a
+        # concrete machine shape (snapshot defaults + inheritance), so a golden snapshot
+        # rebaked at a different shape flows through here instead of desyncing every ledger
+        # row against a pinned constant.
         spec = box.view.spec
-        config.cpu_cores = spec.cpus if spec.cpus is not None else HOGLAND_GOLDEN_CPU_CORES
-        config.memory_gb = spec.memory_mib / 1024 if spec.memory_mib is not None else HOGLAND_GOLDEN_MEMORY_GB
-        config.disk_size_gb = float(spec.disk_gib) if spec.disk_gib is not None else HOGLAND_GOLDEN_DISK_GB
+        if spec.cpus is None or spec.memory_mib is None or spec.disk_gib is None:
+            raise SandboxProvisionError(
+                "Hogland box spec is missing a machine dimension",
+                {"config_name": config.name, "sandbox_id": box.id},
+                cause=RuntimeError(f"incomplete box spec for {box.id}"),
+            )
+        config.cpu_cores = spec.cpus
+        config.memory_gb = spec.memory_mib / 1024
+        config.disk_size_gb = float(spec.disk_gib)
 
         logger.info(f"Created hogland sandbox {box.id} for {config.name}")
         return cls(box=box, config=config)
@@ -289,7 +300,9 @@ class HoglandSandbox(AgentServerLaunchMixin):
     def is_running(self) -> bool:
         return self.get_status() == SandboxStatus.RUNNING
 
-    def execute(self, command: str, timeout_seconds: int | None = None) -> ExecutionResult:
+    def execute(
+        self, command: str, timeout_seconds: int | None = None, env: dict[str, str] | None = None
+    ) -> ExecutionResult:
         if not self.is_running():
             raise SandboxNotRunningError(
                 "Sandbox not in running state.",
@@ -302,7 +315,7 @@ class HoglandSandbox(AgentServerLaunchMixin):
 
         redacted_command = redact_sandbox_command(command)
         try:
-            result = self._box.exec(["bash", "-c", command], timeout_seconds=timeout_seconds)
+            result = self._box.exec(["bash", "-c", command], timeout_seconds=timeout_seconds, env=env)
         except Exception as e:
             redacted_error = redact_sandbox_command(str(e))
             # Provider exceptions can echo the shell command, so avoid exc_info here.

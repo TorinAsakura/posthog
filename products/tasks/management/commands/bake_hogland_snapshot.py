@@ -219,7 +219,25 @@ def _bake_steps(agent_version: str) -> list[_BakeStep]:
             'mkdir -p "/etc/systemd/system/${unit}.d"; '
             'cp /tmp/posthog-env.conf "/etc/systemd/system/${unit}.d/posthog-env.conf"; '
             "rm /tmp/posthog-env.conf; systemctl daemon-reload; "
-            'systemctl restart "$unit"',
+            # A direct restart self-kills: this exec runs inside hogpanion's own
+            # control-group cgroup, so the restart SIGTERMs bash, the exec, and
+            # hogpanion together and the step never returns 0. Detach the restart
+            # into a transient unit that fires after this exec exits; the next step
+            # confirms the service came back.
+            'systemd-run --collect --unit=hogpanion-reload --on-active=2 systemctl restart "$unit"',
+            120,
+        ),
+        _BakeStep(
+            "confirm hogpanion reload",
+            "set -eux; unit=hogpanion.service; "
+            # Give the deferred restart time to fire, so we do not confirm the
+            # pre-restart instance, then poll until the service is active.
+            "sleep 3; "
+            "for _ in $(seq 1 60); do "
+            'if systemctl is-active --quiet "$unit"; then exit 0; fi; '
+            "sleep 1; done; "
+            'echo "hogpanion.service did not become active after reload" >&2; '
+            'systemctl status "$unit" --no-pager || true; exit 1',
             120,
         ),
         _BakeStep(

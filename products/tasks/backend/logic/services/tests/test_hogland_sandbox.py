@@ -79,7 +79,7 @@ class TestHoglandSandboxCreate:
         # Restores must inherit the golden snapshot's machine config.
         for sizing_key in ("cpus", "memory_mib", "disk_gib"):
             assert sizing_key not in kwargs
-        # No public SSH ingress: without this hogplane defaults to ssh-public.
+        # Explicit and defensive; a restore inherits the snapshot's "none" access_type anyway.
         assert kwargs["access_type"] == "none"
         assert kwargs["kind"] == "agent"
         assert kwargs["name"].startswith("sandbox-task-1-")
@@ -100,6 +100,14 @@ class TestHoglandSandboxCreate:
         _sandbox, _client = self._create(config, box=box)
         assert (config.cpu_cores, config.memory_gb, config.disk_size_gb) == (8.0, 32.0, 128.0)
 
+    def test_create_rejects_a_box_spec_missing_a_machine_dimension(self):
+        # The read-back has no golden-constant fallback, so an incomplete spec must fail
+        # loudly rather than price the ledger against a stale pinned shape.
+        box = _mock_box()
+        box.view.spec.memory_mib = None
+        with pytest.raises(SandboxProvisionError):
+            self._create(SandboxConfig(name="incomplete"), box=box)
+
     @parameterized.expand([(template,) for template in SandboxTemplate if template != SandboxTemplate.DEFAULT_BASE])
     def test_create_rejects_templates_without_a_golden_snapshot(self, template: SandboxTemplate):
         with pytest.raises(SandboxProvisionError):
@@ -117,6 +125,18 @@ class TestHoglandSandboxExecution:
         assert (result.stdout, result.stderr, result.exit_code) == ("out", "err", 3)
         assert box.exec.call_args.args[0] == ["bash", "-c", "echo hi"]
         assert box.exec.call_args.kwargs["timeout_seconds"] == 5
+        # No per-call env forwards as None, so the box keeps its baked/create env.
+        assert box.exec.call_args.kwargs["env"] is None
+
+    def test_execute_forwards_per_call_env_to_the_sdk(self):
+        box = _mock_box()
+        box.exec.return_value = _exec_result(stdout="out")
+        sandbox = _running_sandbox(box)
+
+        per_call_env = {"POSTHOG_TASK_RUN_SESSION_TOKEN": "fresh"}
+        sandbox.execute("run", timeout_seconds=5, env=per_call_env)
+
+        assert box.exec.call_args.kwargs["env"] == per_call_env
 
     def test_execute_timeout_raises_sandbox_timeout_error(self):
         box = _mock_box()
