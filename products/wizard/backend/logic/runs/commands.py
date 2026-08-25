@@ -21,7 +21,6 @@ def build_wizard_command(
     if any(_WIZARD_PROGRAM_COMMAND_PATTERN.fullmatch(argument) is None for argument in program_command):
         raise ValueError("Invalid Wizard program command")
 
-    # review: for dev, we should set POSTHOG_API_URL to localhost
     parts = [
         f"cd {shlex.quote(repository_path)} &&",
         f"timeout -k 30 {WIZARD_TIMEOUT_SECONDS}",
