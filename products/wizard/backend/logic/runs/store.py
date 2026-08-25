@@ -1,6 +1,9 @@
 from uuid import UUID
 
-from django.db import models
+from django.db import (
+    models,
+    transaction as database_transaction,
+)
 from django.utils import timezone
 
 from products.wizard.backend.facade.config import WIZARD_RUN_DEADLINE
@@ -21,6 +24,7 @@ from products.wizard.backend.facade.enums import (
 )
 from products.wizard.backend.facade.errors import WizardRunNotFoundError
 from products.wizard.backend.logic.programs import program_to_mapping
+from products.wizard.backend.logic.runs.config import DISPATCH_RETRY_BASE_DELAY, DISPATCH_RETRY_MAX_DELAY
 from products.wizard.backend.logic.runs.diagnostics import error_message
 from products.wizard.backend.logic.runs.mappers import run_from_record, workspace_to_record
 from products.wizard.backend.models import WizardRun
@@ -106,15 +110,21 @@ def mark_dispatch_succeeded(team_id: int, run_id: UUID, workflow_id: str) -> Non
         dispatch_status=WizardRunDispatchStatus.DISPATCHED.value,
         dispatch_attempts=models.F("dispatch_attempts") + 1,
         dispatch_error=None,
+        dispatch_next_attempt_at=None,
         workflow_id=workflow_id,
     )
 
 
 def mark_dispatch_failed(team_id: int, run_id: UUID) -> None:
-    WizardRun.objects.for_team(team_id).filter(id=run_id).update(
-        dispatch_attempts=models.F("dispatch_attempts") + 1,
-        dispatch_error="Temporal dispatch failed.",
-    )
+    with database_transaction.atomic():
+        run = WizardRun.objects.for_team(team_id).select_for_update().get(id=run_id)
+
+        retry_delay = min(DISPATCH_RETRY_BASE_DELAY * 2**run.dispatch_attempts, DISPATCH_RETRY_MAX_DELAY)
+
+        run.dispatch_attempts += 1
+        run.dispatch_error = "Temporal dispatch failed."
+        run.dispatch_next_attempt_at = timezone.now() + retry_delay
+        run.save(update_fields=["dispatch_attempts", "dispatch_error", "dispatch_next_attempt_at", "updated_at"])
 
 
 def set_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:

@@ -228,12 +228,13 @@ def test_dispatch_reports_failure() -> None:
             "start_wizard_run_workflow",
             side_effect=WizardTemporalError,
         ),
-        patch.object(dispatch.store, "mark_dispatch_failed"),
+        patch.object(dispatch.store, "mark_dispatch_failed") as mark_dispatch_failed,
         patch.object(dispatch.wizard_observability, "dispatch_finished") as dispatch_finished,
         pytest.raises(WizardRunDispatchError),
     ):
         dispatch.dispatch_created_cloud_wizard_run_to_temporal_worker(run.team_id, run.id)
 
+    mark_dispatch_failed.assert_called_once_with(run.team_id, run.id)
     dispatch_finished.assert_called_once_with(run, WizardRunDispatchOutcome.FAILED)
 
 

@@ -75,6 +75,25 @@ def test_reconciliation_continues_after_expected_dispatch_failure(team, user) ->
 
 
 @pytest.mark.django_db
+def test_reconciliation_skips_dispatches_that_are_not_ready_for_retry(team, user) -> None:
+    ready_run = _create_cloud_run(team.id, user.id)
+    _create_cloud_run(team.id, user.id, dispatch_next_attempt_at=timezone.now() + timedelta(minutes=1))
+
+    with patch(
+        "products.wizard.backend.logic.reconciliation.service.dispatch_created_cloud_wizard_run_to_temporal_worker"
+    ) as dispatch_wizard_run:
+        result = reconciliation.reconcile_pending_dispatches()
+
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=1,
+        failed=0,
+        batch_limit_reached=False,
+    )
+    dispatch_wizard_run.assert_called_once_with(team.id, ready_run.id)
+
+
+@pytest.mark.django_db
 def test_reconciliation_surfaces_unexpected_dispatch_failure(team, user) -> None:
     _create_cloud_run(team.id, user.id)
 

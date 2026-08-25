@@ -121,6 +121,7 @@ class WizardRun(UUIDModel, TeamScopedRootMixin, CreatedMetaFields, UpdatedMetaFi
     )
     dispatch_attempts = models.PositiveSmallIntegerField(default=0)
     dispatch_error = models.CharField(max_length=255, null=True, blank=True)
+    dispatch_next_attempt_at = models.DateTimeField(null=True, blank=True)
     workflow_id = models.CharField(max_length=255, null=True, blank=True)
 
     stage = models.CharField(

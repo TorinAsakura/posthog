@@ -1,5 +1,6 @@
 import logging
 
+from django.db.models import Q
 from django.utils import timezone
 
 from posthog.dataclasses import frozen
@@ -46,6 +47,8 @@ def reconcile_pending_dispatches() -> ReconciliationSummary:
             status=WizardRunStatus.CREATED.value,
             dispatch_status=WizardRunDispatchStatus.PENDING.value,
         )
+        .filter(Q(dispatch_next_attempt_at__isnull=True) | Q(dispatch_next_attempt_at__lte=timezone.now()))
+        .order_by("dispatch_next_attempt_at", "created_at")
         .values_list("team_id", "id")[:RECONCILIATION_BATCH_SIZE]
     )
 
