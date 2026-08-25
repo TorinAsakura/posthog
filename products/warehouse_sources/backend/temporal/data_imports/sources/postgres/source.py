@@ -361,6 +361,15 @@ class PostgresSource(SQLSource[PostgresSourceConfig], SSHTunnelMixin, ValidateDa
                 '("nxdomain"). This usually means the database project is paused or deleted. Check '
                 "that your database is active, then re-enable the sync."
             ),
+            # Supabase's Supavisor pooler reports a routing failure to its upstream backend as
+            # "FATAL: Failed to connect to database: {:error, :enetunreach}" — Erlang's wording for
+            # ENETUNREACH, the same OS condition libpq surfaces as "Network is unreachable" (handled
+            # below). Unlike the sibling ":etimedout"/":econnrefused" tuples in
+            # `_CONNECTION_DROPPED_ERROR_SUBSTRINGS` — a transient blip reaching a backend that's up —
+            # there's no route to the backend's network at all, which is deterministic for the
+            # configured host (an IPv6-only backend PostHog can't route to, or a firewall dropping our
+            # IPs), so retrying re-hits the same wall. Match the stable erlang-tuple fragment.
+            "{:error, :enetunreach}": _HOST_UNREACHABLE_ERROR,
             # Supabase/Supavisor poolers reject a connection that carries no tenant identifier with
             # "FATAL: (ENOIDENTIFIER) no tenant identifier provided (external_id or sni_hostname
             # required)". The shared regional pooler host (e.g. aws-0-<region>.pooler.supabase.com)
@@ -577,6 +586,12 @@ class PostgresSource(SQLSource[PostgresSourceConfig], SSHTunnelMixin, ValidateDa
             "InvalidObjectDefinition": None,
             "Connection refused": None,
             "No route to host": None,
+            # The OS-level TCP connect() timing out (strerror(ETIMEDOUT)) instead of getting an
+            # immediate refusal or unreachable-route response. Same connect-time host-reachability
+            # class as its two siblings above — usually a non-routable host (e.g. a private RDS
+            # endpoint) or a firewall silently dropping PostHog's egress IPs — and won't change on
+            # retry until the customer fixes the network path.
+            "Connection timed out": None,
             "password authentication failed connection": None,
             # psycopg raises ConnectionTimeout ("connection timeout expired") only while establishing
             # a connection. The read path retries it in-process first (see
