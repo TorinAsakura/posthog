@@ -169,8 +169,9 @@ def test_registry_falls_back_when_payload_is_invalid(_name: str, payload: object
     assert programs == (POSTHOG_INTEGRATION_PROGRAM,)
 
 
-def test_registry_falls_back_when_payload_fetch_fails() -> None:
-    with patch("posthoganalytics.get_feature_flag_payload", side_effect=RuntimeError("feature flags unavailable")):
-        programs = wizard_facade.get_registry(distinct_id="user-distinct-id", organization_id="organization-id")
-
-    assert programs == (POSTHOG_INTEGRATION_PROGRAM,)
+def test_registry_does_not_hide_programming_errors() -> None:
+    with (
+        patch("posthoganalytics.get_feature_flag_payload", side_effect=RuntimeError("bug")),
+        pytest.raises(RuntimeError, match="bug"),
+    ):
+        wizard_facade.get_registry(distinct_id="user-distinct-id", organization_id="organization-id")
