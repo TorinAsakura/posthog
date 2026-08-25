@@ -275,6 +275,51 @@ class TestIncremental:
             _drop(dsn, table_name)
 
 
+class TestIncrementalTableOwnership:
+    """An incremental run writes straight into the live table, named after the source's
+    resource name. It must refuse a table it did not create, the same way a full refresh
+    refuses to replace one, rather than evolving its schema and merging rows into it.
+    """
+
+    async def test_an_incremental_run_refuses_to_write_into_a_table_it_did_not_create(self, dsn, table_name) -> None:
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            conn.execute(f'CREATE TABLE public."{table_name}" (id BIGINT, name TEXT)')
+            conn.execute(f"INSERT INTO public.\"{table_name}\" VALUES (99, 'untouched')")
+
+        ctx = _ctx(table_name, "incremental", primary_keys=("id",))
+        writer = LocalPostgresWriter(ctx, dsn)
+        try:
+            with pytest.raises(UnrelatedTableExistsError):
+                await writer.write_batch(
+                    _batches(_rows(["a"], [1])),
+                    DestinationBatchContext(run=ctx, batch_index=0, is_final_batch=True),
+                )
+
+            # Neither the table's schema nor its rows were touched.
+            assert _read(dsn, table_name) == [(99, "untouched")]
+        finally:
+            _drop(dsn, table_name)
+
+    async def test_a_later_incremental_run_may_write_into_a_table_this_writer_created(self, dsn, table_name) -> None:
+        first = _ctx(table_name, "incremental", primary_keys=("id",))
+        first_writer = LocalPostgresWriter(first, dsn)
+        second = _ctx(table_name, "incremental", primary_keys=("id",))
+        second_writer = LocalPostgresWriter(second, dsn)
+        try:
+            await first_writer.write_batch(
+                _batches(_rows(["a"], [1])),
+                DestinationBatchContext(run=first, batch_index=0, is_final_batch=True),
+            )
+            await second_writer.write_batch(
+                _batches(_rows(["b"], [2])),
+                DestinationBatchContext(run=second, batch_index=0, is_final_batch=True),
+            )
+
+            assert _read(dsn, table_name) == [(1, "a"), (2, "b")]
+        finally:
+            _drop(dsn, table_name)
+
+
 class TestValueFidelity:
     async def test_values_holding_csv_control_characters_survive_the_copy(self, dsn, table_name) -> None:
         # The bulk load is a COPY in CSV format, where a tab ends a field and a newline ends a

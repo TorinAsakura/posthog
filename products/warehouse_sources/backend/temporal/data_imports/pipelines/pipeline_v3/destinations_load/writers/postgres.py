@@ -62,15 +62,17 @@ BATCH_INDEX_COLUMN = "_ph_batch_index"
 # Set on a full refresh's staging table as soon as it exists, and carried across the final
 # rename because a Postgres comment follows the table's OID, not its name. `finalize_run`
 # checks for this before it ever drops something named after the destination's live table, so
-# a full refresh can only ever replace a table this writer created. `table_name` is derived
-# from the source's resource name (see `delivery.py`), which a custom-source manifest
-# controls; without this check, naming a resource after an unrelated table already sitting in
-# the destination schema would be enough to have it dropped on the next sync.
+# a full refresh can only ever replace a table this writer created. An incremental run marks
+# its live table the same way, the first time it creates one, and checks it before writing to
+# a table that already existed. `table_name` is derived from the source's resource name (see
+# `delivery.py`), which a custom-source manifest controls; without this check, naming a
+# resource after an unrelated table already sitting in the destination schema would be enough
+# to have it dropped, or merged into, on the next sync.
 _OWNERSHIP_COMMENT = "posthog-warehouse-sync-owned"
 
 
 class UnrelatedTableExistsError(RuntimeError):
-    """A full refresh would have replaced a table this writer never created."""
+    """A sync would have replaced or mutated a table this writer never created."""
 
 
 def staging_table_name(ctx: DestinationRunContext) -> str:
@@ -248,6 +250,20 @@ class PostgresDestinationWriter:
             first = True
             async for batch in batches:
                 if first:
+                    table_existed = False
+                    if not full_refresh:
+                        # An incremental run writes straight into the live table, so a table
+                        # that predates this sync and merely happens to share `table_name`
+                        # must be refused up front, before its schema is evolved or a row in
+                        # it is touched. A full refresh gets the same guarantee at swap time,
+                        # in `finalize_run`, once the new data is known to be complete.
+                        table_existed = await self._table_exists(client, target)
+                        if table_existed and not await self._is_owned(client, target):
+                            raise UnrelatedTableExistsError(
+                                f'"{self._schema}"."{target}" already exists and was not created by this sync; '
+                                "refusing to merge an incremental run's rows into it."
+                            )
+
                     await self._ensure_table(
                         client,
                         target,
@@ -262,6 +278,10 @@ class PostgresDestinationWriter:
                         await self._delete_batch_rows(client, target, ctx.batch_index)
                         # Marked on the staging table, not the live one: the comment survives
                         # the rename in `finalize_run`, which is where it gets checked.
+                        await self._mark_owned(client, target)
+                    elif not table_existed:
+                        # A table this writer just created for an incremental run never gets
+                        # renamed, so mark it in place rather than at swap time.
                         await self._mark_owned(client, target)
                     first = False
 
