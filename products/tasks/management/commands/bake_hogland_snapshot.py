@@ -212,8 +212,10 @@ def _bake_steps(agent_version: str) -> list[_BakeStep]:
             # Make STATIC_ENV plus the per-box /etc/hogbox-env visible to hog-exec's
             # children — this is what gives exec processes the Modal-style container env.
             "set -eux; "
-            "unit=$(systemctl list-units --type=service --all --no-legend | awk '{print $1}' | grep -Ei 'hog.*exec|exec.*hog' | head -1); "
-            'test -n "$unit"; '
+            # The guest image ships exactly one agent unit; target it directly and confirm
+            # it is up. Grepping list-units yielded an empty match that aborted under set -e.
+            "unit=hogpanion.service; "
+            'systemctl is-active "$unit"; '
             'mkdir -p "/etc/systemd/system/${unit}.d"; '
             'cp /tmp/posthog-env.conf "/etc/systemd/system/${unit}.d/posthog-env.conf"; '
             "rm /tmp/posthog-env.conf; systemctl daemon-reload; "

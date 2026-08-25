@@ -33,10 +33,20 @@ def _exec_result(**overrides) -> ExecResult:
     return ExecResult.model_validate(payload)
 
 
-def _mock_box(box_id: str = "box-abc123def456", status: str = "running") -> MagicMock:
+def _mock_box(
+    box_id: str = "box-abc123def456",
+    status: str = "running",
+    *,
+    cpus: float = 4.0,
+    memory_mib: int = 16384,
+    disk_gib: int = 64,
+) -> MagicMock:
     box = MagicMock()
     box.id = box_id
     box.status = status
+    box.view.spec.cpus = cpus
+    box.view.spec.memory_mib = memory_mib
+    box.view.spec.disk_gib = disk_gib
     box.refresh.return_value = box
     return box
 
@@ -47,9 +57,9 @@ def _running_sandbox(box: MagicMock | None = None) -> HoglandSandbox:
 
 
 class TestHoglandSandboxCreate:
-    def _create(self, config: SandboxConfig) -> tuple[HoglandSandbox, MagicMock]:
+    def _create(self, config: SandboxConfig, box: MagicMock | None = None) -> tuple[HoglandSandbox, MagicMock]:
         client = MagicMock()
-        client.create.return_value = _mock_box()
+        client.create.return_value = box if box is not None else _mock_box()
         with patch("products.tasks.backend.logic.services.hogland_sandbox.get_hogland_client", return_value=client):
             sandbox = HoglandSandbox.create(config)
         return sandbox, client
@@ -69,6 +79,8 @@ class TestHoglandSandboxCreate:
         # Restores must inherit the golden snapshot's machine config.
         for sizing_key in ("cpus", "memory_mib", "disk_gib"):
             assert sizing_key not in kwargs
+        # No public SSH ingress: without this hogplane defaults to ssh-public.
+        assert kwargs["access_type"] == "none"
         assert kwargs["kind"] == "agent"
         assert kwargs["name"].startswith("sandbox-task-1-")
         assert sorted(kwargs["tags"]) == ["run_id=r1", "task_id=t1"]
@@ -79,13 +91,14 @@ class TestHoglandSandboxCreate:
         assert sandbox.id == "box-abc123def456"
         assert config.snapshot_restored is False
 
-    def test_create_pins_config_to_the_golden_shape_for_the_ledger(self):
-        # A per-task override is ignored by the provisioned box, so the config must be
-        # pinned to the delivered shape — otherwise the usage ledger prices the override
-        # (e.g. 16 cores) against a 4-core hogbox and overbills.
+    def test_create_records_the_read_back_box_shape_for_the_ledger(self):
+        # The box ignores per-task overrides, so the ledger must reflect the shape the box
+        # actually delivered, read back from box.view.spec — not the requested override and
+        # not a pinned constant that a rebaked golden snapshot would silently desync.
         config = SandboxConfig(name="oversized", cpu_cores=16, memory_gb=64, disk_size_gb=100)
-        _sandbox, _client = self._create(config)
-        assert (config.cpu_cores, config.memory_gb, config.disk_size_gb) == (4.0, 16.0, 64.0)
+        box = _mock_box(cpus=8.0, memory_mib=32768, disk_gib=128)
+        _sandbox, _client = self._create(config, box=box)
+        assert (config.cpu_cores, config.memory_gb, config.disk_size_gb) == (8.0, 32.0, 128.0)
 
     @parameterized.expand([(template,) for template in SandboxTemplate if template != SandboxTemplate.DEFAULT_BASE])
     def test_create_rejects_templates_without_a_golden_snapshot(self, template: SandboxTemplate):

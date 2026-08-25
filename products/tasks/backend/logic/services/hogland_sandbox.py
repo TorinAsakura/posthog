@@ -218,6 +218,9 @@ class HoglandSandbox(AgentServerLaunchMixin):
                 # inherit the golden snapshot's machine config (a mismatch is a 400).
                 # Per-task resource overrides are therefore unsupported on hogland.
                 snapshot_id=snapshot_alias,
+                # No shell ingress: the box is driven via exec / files / proxy. Without this
+                # hogplane defaults to ssh-public, opening a public port + DNAT per box.
+                access_type="none",
                 # Non-empty names must be unique per owner; suffix like the Modal backend.
                 name=f"{config.name}-{uuid.uuid4().hex[:6]}"[:64],
                 kind=HOGLAND_TASKS_BOX_KIND,
@@ -249,11 +252,13 @@ class HoglandSandbox(AgentServerLaunchMixin):
                 "Hogland sandbox ignores per-task resource overrides; using the golden snapshot's machine config",
                 extra={"sandbox_id": box.id, "cpu_cores": config.cpu_cores, "memory_gb": config.memory_gb},
             )
-        # Pin the config to the shape actually provisioned so the usage ledger prices the
-        # delivered box, not an ignored per-task override (which would otherwise misbill).
-        config.cpu_cores = HOGLAND_GOLDEN_CPU_CORES
-        config.memory_gb = HOGLAND_GOLDEN_MEMORY_GB
-        config.disk_size_gb = HOGLAND_GOLDEN_DISK_GB
+        # Price the usage ledger on the shape the box actually delivered, read back from the
+        # box spec — not the requested golden constants. A golden snapshot rebaked at a
+        # different shape would otherwise desync every ledger row against a pinned constant.
+        spec = box.view.spec
+        config.cpu_cores = spec.cpus if spec.cpus is not None else HOGLAND_GOLDEN_CPU_CORES
+        config.memory_gb = spec.memory_mib / 1024 if spec.memory_mib is not None else HOGLAND_GOLDEN_MEMORY_GB
+        config.disk_size_gb = float(spec.disk_gib) if spec.disk_gib is not None else HOGLAND_GOLDEN_DISK_GB
 
         logger.info(f"Created hogland sandbox {box.id} for {config.name}")
         return cls(box=box, config=config)
