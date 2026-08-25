@@ -37,6 +37,7 @@ class TestIsAiEventsEnabled:
         )
 
 
+@pytest.mark.django_db
 class TestQueryAiEvents:
     def _make_query(self):
         return ast.SelectQuery(

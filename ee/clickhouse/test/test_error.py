@@ -223,6 +223,7 @@ def test_wrap_clickhouse_query_error(error, expected_type, expected_message, exp
     assert label == expected_ch_error
 
 
+@pytest.mark.django_db
 def test_per_query_memory_limit_phrasing_matches_real_clickhouse():
     with pytest.raises(ClickHouseQueryMemoryLimitExceeded) as ctx:
         sync_execute(
