@@ -1,6 +1,8 @@
 import logging
 from typing import Any
 
+from django.db import DatabaseError
+
 from celery import shared_task
 from celery.app.task import Task
 
@@ -68,7 +70,7 @@ def sync_wizard_event_definitions(self: Task, team_id: int, session_id: str) -> 
             team_id=team_id,
             definitions=_planned_event_definitions(session.event_plan),
         )
-    except Exception as error:
+    except DatabaseError as error:
         countdown = min(2**self.request.retries, 60)
         logger.warning(
             "Retrying wizard event definition sync",

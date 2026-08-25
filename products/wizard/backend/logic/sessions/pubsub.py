@@ -16,6 +16,7 @@ from typing import Any
 from django.db import transaction
 
 import structlog
+from redis.exceptions import RedisError
 
 from posthog.redis import get_async_client, get_client
 
@@ -56,7 +57,7 @@ def publish_session_update(dto: WizardSessionDTO) -> None:
     def _publish() -> None:
         try:
             receivers = get_client().publish(channel, payload)
-        except Exception:
+        except RedisError:
             WIZARD_PUBSUB_PUBLISH_TOTAL.labels(outcome="failed").inc()
             logger.exception(
                 "wizard_sessions publish failed",
@@ -95,30 +96,27 @@ async def subscribe(team_id: int, workflow_id: str, skill_id: str | None = None)
 
     redis = get_async_client()
     pubsub = redis.pubsub(ignore_subscribe_messages=True)
+    subscribed = False
+
     try:
         if is_pattern:
             await pubsub.psubscribe(target)
         else:
             await pubsub.subscribe(target)
-    except Exception:
-        try:
-            await pubsub.close()
-        except Exception:
-            pass
-        raise
+        subscribed = True
 
-    try:
         yield pubsub
     finally:
-        try:
-            if is_pattern:
-                await pubsub.punsubscribe(target)
-            else:
-                await pubsub.unsubscribe(target)
-        except Exception:
-            logger.warning("wizard_sessions unsubscribe failed", target=target)
-        finally:
+        if subscribed:
             try:
-                await pubsub.close()
-            except Exception:
-                logger.warning("wizard_sessions pubsub close failed", target=target)
+                if is_pattern:
+                    await pubsub.punsubscribe(target)
+                else:
+                    await pubsub.unsubscribe(target)
+            except RedisError:
+                logger.warning("wizard_sessions unsubscribe failed", target=target)
+
+        try:
+            await pubsub.close()
+        except RedisError:
+            logger.warning("wizard_sessions pubsub close failed", target=target)

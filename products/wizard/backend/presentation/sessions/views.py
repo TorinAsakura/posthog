@@ -396,11 +396,8 @@ async def _wizard_session_event_stream(
             if request is not None:
                 is_disconnected = getattr(request, "is_disconnected", None)
                 if is_disconnected is not None:
-                    try:
-                        if await is_disconnected():
-                            return
-                    except Exception:
-                        pass
+                    if await is_disconnected():
+                        return
 
             message = await pubsub.get_message(timeout=session_config.SSE_POLL_TIMEOUT_SECONDS)
             now = time.monotonic()

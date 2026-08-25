@@ -3,7 +3,10 @@ from datetime import UTC, datetime
 import pytest
 from unittest.mock import patch
 
+from django.db import DatabaseError
 from django.test import override_settings
+
+from kombu.exceptions import OperationalError
 
 from posthog.models import Team, User
 
@@ -179,7 +182,7 @@ def test_completed_transition_caps_valid_unique_event_definitions(team, django_c
 @pytest.mark.django_db
 @patch(
     "products.wizard.backend.logic.sessions.lifecycle.sync_wizard_event_definitions.delay",
-    side_effect=RuntimeError("task dispatch failed"),
+    side_effect=OperationalError("task dispatch failed"),
 )
 def test_event_definition_dispatch_failure_does_not_break_completed_upsert(
     _mock_sync, team, django_capture_on_commit_callbacks
@@ -211,9 +214,9 @@ def test_event_definition_task_recovers_after_transient_failure(team):
     with (
         patch(
             "products.wizard.backend.tasks.tasks.create_placeholder_event_definitions",
-            side_effect=RuntimeError("definition write failed"),
+            side_effect=DatabaseError("definition write failed"),
         ),
-        pytest.raises(RuntimeError, match="definition write failed"),
+        pytest.raises(DatabaseError, match="definition write failed"),
     ):
         sync_wizard_event_definitions.run(team.id, session.session_id)
 

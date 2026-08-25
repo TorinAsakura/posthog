@@ -1,13 +1,15 @@
 from datetime import UTC, datetime
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.db import transaction
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from products.wizard.backend.facade.contracts import WizardSessionDTO, WizardTaskDTO
 from products.wizard.backend.facade.enums import WizardSessionRunPhase, WizardSessionTaskStatus
-from products.wizard.backend.logic.sessions.pubsub import channel_name, publish_session_update
+from products.wizard.backend.logic.sessions.pubsub import channel_name, publish_session_update, subscribe
 from products.wizard.backend.logic.sessions.validation import validate_channel_identifier
 
 
@@ -92,10 +94,28 @@ def test_publish_session_update_does_not_publish_on_rollback():
 def test_publish_session_update_swallows_redis_errors():
     """Redis publish failure must not fail the upsert request."""
     redis_mock = MagicMock()
-    redis_mock.publish.side_effect = ConnectionError("redis is down")
+    redis_mock.publish.side_effect = RedisConnectionError("redis is down")
 
     with patch("products.wizard.backend.logic.sessions.pubsub.get_client", return_value=redis_mock):
         with transaction.atomic():
             publish_session_update(_dto())
         # If the exception escaped on_commit, this assertion wouldn't run.
         assert redis_mock.publish.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_subscribe_closes_pubsub_when_subscription_has_programming_error() -> None:
+    pubsub = MagicMock()
+    pubsub.subscribe = AsyncMock(side_effect=RuntimeError("bug"))
+    pubsub.close = AsyncMock()
+    redis = MagicMock()
+    redis.pubsub.return_value = pubsub
+
+    with (
+        patch("products.wizard.backend.logic.sessions.pubsub.get_async_client", return_value=redis),
+        pytest.raises(RuntimeError, match="bug"),
+    ):
+        async with subscribe(1, "onboarding", "nextjs"):
+            pass
+
+    pubsub.close.assert_awaited_once_with()

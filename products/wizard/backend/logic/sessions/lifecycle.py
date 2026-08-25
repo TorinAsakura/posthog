@@ -7,6 +7,8 @@ from functools import partial
 
 from django.db import transaction
 
+from kombu.exceptions import OperationalError
+
 from products.wizard.backend.facade.contracts import UpsertWizardSessionInput, WizardSessionDTO
 from products.wizard.backend.facade.enums import WizardSessionRunPhase
 from products.wizard.backend.facade.errors import WizardSessionOwnershipError
@@ -90,7 +92,6 @@ def upsert_session(params: UpsertWizardSessionInput) -> tuple[WizardSessionDTO, 
         ):
             transaction.on_commit(
                 partial(_enqueue_event_definition_sync, params.team_id, params.session_id),
-                robust=True,
             )
         dto = to_session_dto(instance)
 
@@ -102,7 +103,7 @@ def upsert_session(params: UpsertWizardSessionInput) -> tuple[WizardSessionDTO, 
 def _enqueue_event_definition_sync(team_id: int, session_id: str) -> None:
     try:
         sync_wizard_event_definitions.delay(team_id, session_id)
-    except Exception:
+    except OperationalError:
         logger.exception("Failed to enqueue event definition sync for a completed wizard session")
 
 
