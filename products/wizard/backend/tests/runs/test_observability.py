@@ -97,7 +97,8 @@ def test_stage_update_is_idempotent() -> None:
     run = replace(_cloud_run(), stage=WizardRunStage.PROVISIONING)
 
     with (
-        patch.object(lifecycle.store, "get_run", return_value=run),
+        patch.object(lifecycle.database_transaction, "atomic"),
+        patch.object(lifecycle.store, "get_run_for_update", return_value=run),
         patch.object(lifecycle.store, "set_run_stage") as set_run_stage,
         patch.object(lifecycle.run_observability, "stage_entered") as stage_entered,
     ):
