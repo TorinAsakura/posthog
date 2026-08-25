@@ -16,6 +16,7 @@ from products.wizard.backend.facade.enums import (
 from products.wizard.backend.logic.programs import program_to_mapping
 from products.wizard.backend.logic.registry.config import POSTHOG_INTEGRATION_PROGRAM
 from products.wizard.backend.logic.runs import lifecycle, reconciliation
+from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.models import WizardRun, WizardWorker
 from products.wizard.backend.temporal.errors import WizardTemporalError
 
@@ -47,6 +48,33 @@ def test_reconciliation_redispatches_pending_run(team, user) -> None:
 
     assert result == 1
     dispatch_wizard_run.assert_called_once_with(team.id, run.id)
+
+
+@pytest.mark.django_db
+def test_reconciliation_continues_after_expected_dispatch_failure(team, user) -> None:
+    _create_cloud_run(team.id, user.id)
+
+    with patch(
+        "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker",
+        side_effect=WizardRunDispatchError,
+    ):
+        result = reconciliation.reconcile_pending_dispatches()
+
+    assert result == 0
+
+
+@pytest.mark.django_db
+def test_reconciliation_surfaces_unexpected_dispatch_failure(team, user) -> None:
+    _create_cloud_run(team.id, user.id)
+
+    with (
+        patch(
+            "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker",
+            side_effect=RuntimeError("bug"),
+        ),
+        pytest.raises(RuntimeError, match="bug"),
+    ):
+        reconciliation.reconcile_pending_dispatches()
 
 
 @pytest.mark.django_db
