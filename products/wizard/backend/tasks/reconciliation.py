@@ -7,7 +7,7 @@ from prometheus_client import Gauge
 from posthog.celery_queues import CeleryQueue
 from posthog.tasks.utils import PushGatewayTask
 
-from products.wizard.backend.logic.runs import reconciliation
+from products.wizard.backend.logic.reconciliation import service as reconciliation
 from products.wizard.backend.tasks.config import RECONCILE_WIZARD_RUNS_TASK
 
 logger = logging.getLogger(__name__)

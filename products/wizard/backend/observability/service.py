@@ -2,7 +2,7 @@ import logging
 
 from products.wizard.backend.facade.contracts import WizardRunDTO, WizardRunPullRequestArtifactDTO
 from products.wizard.backend.facade.enums import WizardRunStatus
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerTelemetry
+from products.wizard.backend.logic.workers.contracts import WizardWorkerTelemetry
 from products.wizard.backend.observability import events, metrics
 from products.wizard.backend.observability.config import (
     WIZARD_RUN_CANCELLED_EVENT,

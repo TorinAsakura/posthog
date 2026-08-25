@@ -26,7 +26,8 @@ from products.wizard.backend.facade.enums import (
     WizardRunStatus,
     WizardWorkspaceType,
 )
-from products.wizard.backend.logic.runs.worker import (
+from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage
+from products.wizard.backend.logic.workers.service import (
     GitRepositoryCloneRequest,
     GitRepositoryHandoffRequest,
     WizardExecutionRequest,
@@ -36,7 +37,6 @@ from products.wizard.backend.logic.runs.worker import (
     WizardWorkerResult,
     WizardWorkerTimeoutError,
 )
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage
 from products.wizard.backend.temporal.activities.errors import (
     WIZARD_REPOSITORY_ACCESS_ERROR_TYPE,
     WIZARD_WORKER_EXECUTION_ERROR_TYPE,

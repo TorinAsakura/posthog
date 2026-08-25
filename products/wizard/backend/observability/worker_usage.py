@@ -1,4 +1,4 @@
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerTelemetry
+from products.wizard.backend.logic.workers.contracts import WizardWorkerTelemetry
 from products.wizard.backend.observability.contracts import WizardWorkerUsageObservation
 
 

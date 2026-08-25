@@ -8,7 +8,7 @@ from parameterized import parameterized
 
 from products.tasks.backend.facade.repository import RepositoryPullRequest
 from products.tasks.backend.facade.sandbox import SandboxNotFoundError
-from products.wizard.backend.logic.runs.worker import (
+from products.wizard.backend.logic.workers.service import (
     GitRepositoryCloneRequest,
     GitRepositoryHandoffRequest,
     WizardExecutionRequest,
@@ -28,9 +28,9 @@ def _execution_result(*, stdout: str = "", stderr: str = "", exit_code: int = 0)
     return SimpleNamespace(stdout=stdout, stderr=stderr, exit_code=exit_code)
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
-@patch("products.wizard.backend.logic.runs.worker.create_wizard_oauth_access_token_for_user")
-@patch("products.wizard.backend.logic.runs.worker.User.objects.get")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.create_wizard_oauth_access_token_for_user")
+@patch("products.wizard.backend.logic.workers.service.User.objects.get")
 def test_provision_worker_configures_wizard_environment(
     get_user: MagicMock,
     create_wizard_token: MagicMock,
@@ -55,8 +55,8 @@ def test_provision_worker_configures_wizard_environment(
     assert config.ttl_seconds == 75 * 60
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
-@patch("products.wizard.backend.logic.runs.worker.get_github_token")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_github_token")
 def test_clone_repository_uses_integration_token(
     get_github_token: MagicMock,
     get_sandbox_class: MagicMock,
@@ -77,8 +77,8 @@ def test_clone_repository_uses_integration_token(
     sandbox.clone_repository.assert_called_once_with(request.repository, github_token="github-secret", shallow=True)
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
-@patch("products.wizard.backend.logic.runs.worker.get_github_token", return_value="github-secret")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_github_token", return_value="github-secret")
 def test_clone_repository_rejects_clone_failure(
     _get_github_token: MagicMock,
     get_sandbox_class: MagicMock,
@@ -105,7 +105,7 @@ def test_clone_repository_rejects_clone_failure(
         ),
     )
 )
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_execute_wizard_uses_selected_program(
     _name: str,
     program_command: tuple[str, ...],
@@ -131,7 +131,7 @@ def test_execute_wizard_uses_selected_program(
     assert "wizard-secret" not in command
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_execute_wizard_rejects_program_options(get_sandbox_class: MagicMock) -> None:
     request = WizardExecutionRequest(
         sandbox_id="worker-id",
@@ -147,7 +147,7 @@ def test_execute_wizard_rejects_program_options(get_sandbox_class: MagicMock) ->
     get_sandbox_class.return_value.get_by_id.return_value.execute.assert_not_called()
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_execute_wizard_rejects_mutable_version(get_sandbox_class: MagicMock) -> None:
     request = WizardExecutionRequest(
         sandbox_id="worker-id",
@@ -163,7 +163,7 @@ def test_execute_wizard_rejects_mutable_version(get_sandbox_class: MagicMock) ->
     get_sandbox_class.return_value.get_by_id.return_value.execute.assert_not_called()
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_execute_wizard_maps_command_timeout(get_sandbox_class: MagicMock) -> None:
     request = WizardExecutionRequest(
         sandbox_id="worker-id",
@@ -178,9 +178,9 @@ def test_execute_wizard_maps_command_timeout(get_sandbox_class: MagicMock) -> No
         execute_wizard(request)
 
 
-@patch("products.wizard.backend.logic.runs.worker.repository_facade.create_pull_request")
-@patch("products.wizard.backend.logic.runs.worker.repository_facade.create_signed_commit")
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.repository_facade.create_pull_request")
+@patch("products.wizard.backend.logic.workers.service.repository_facade.create_signed_commit")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
     get_sandbox_class: MagicMock,
     create_signed_commit: MagicMock,
@@ -227,8 +227,8 @@ def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
     )
 
 
-@patch("products.wizard.backend.logic.runs.worker.repository_facade.create_pull_request")
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.repository_facade.create_pull_request")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_git_repository_handoff_skips_publish_without_changes(
     get_sandbox_class: MagicMock,
     create_pull_request: MagicMock,
@@ -250,7 +250,7 @@ def test_git_repository_handoff_skips_publish_without_changes(
     create_pull_request.assert_not_called()
 
 
-@patch("products.wizard.backend.logic.runs.worker.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
 def test_destroy_worker_accepts_already_destroyed_sandbox(get_sandbox_class: MagicMock) -> None:
     get_sandbox_class.return_value.get_by_id.side_effect = SandboxNotFoundError(
         "Worker not found.",

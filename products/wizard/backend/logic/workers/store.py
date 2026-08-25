@@ -5,12 +5,12 @@ from django.db.models import F
 from django.utils import timezone
 
 from products.wizard.backend.facade.enums import WizardWorkerCleanupStatus
-from products.wizard.backend.logic.runs.worker import WizardWorkerProvisioning
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerTelemetry, WizardWorkerUsageMeasurement
-from products.wizard.backend.logic.runs.worker_serializers import (
+from products.wizard.backend.logic.workers.contracts import WizardWorkerTelemetry, WizardWorkerUsageMeasurement
+from products.wizard.backend.logic.workers.serializers import (
     worker_resource_usage_from_record,
     worker_resource_usage_to_record,
 )
+from products.wizard.backend.logic.workers.service import WizardWorkerProvisioning
 from products.wizard.backend.models import WizardWorker
 
 

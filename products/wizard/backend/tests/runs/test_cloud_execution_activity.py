@@ -7,7 +7,7 @@ from temporalio.testing import ActivityEnvironment
 from products.wizard.backend.facade import api as wizard_facade
 from products.wizard.backend.facade.contracts import CreateWizardRunInput, GitRepositoryWorkspace
 from products.wizard.backend.facade.enums import WizardRunEnvironment
-from products.wizard.backend.logic.runs.worker import WizardExecutionRequest
+from products.wizard.backend.logic.workers.service import WizardExecutionRequest
 from products.wizard.backend.temporal.activities.execution import execute_wizard
 from products.wizard.backend.temporal.contracts import PreparedGitRepositoryWorkspace
 

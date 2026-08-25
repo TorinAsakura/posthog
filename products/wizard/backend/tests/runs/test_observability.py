@@ -22,7 +22,7 @@ from products.wizard.backend.facade.enums import (
 from products.wizard.backend.logic.registry.config import POSTHOG_INTEGRATION_PROGRAM
 from products.wizard.backend.logic.runs import dispatch, lifecycle
 from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage, WizardWorkerTelemetry
+from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage, WizardWorkerTelemetry
 from products.wizard.backend.observability import events, metrics, service
 from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome
 from products.wizard.backend.observability.service import WizardObservability

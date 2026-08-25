@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 from django.db import DatabaseError
 
 from products.tasks.backend.facade.sandbox import SandboxCleanupError
-from products.wizard.backend.logic.runs import worker_lifecycle
 from products.wizard.backend.logic.runs.errors import WizardWorkerCleanupError
+from products.wizard.backend.logic.workers import lifecycle as worker_lifecycle
 
 
 def test_cleanup_worker_destroys_sandbox_when_usage_measurement_has_programming_error() -> None:

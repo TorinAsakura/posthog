@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage
+from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage
 
 
 def worker_resource_usage_to_record(resource_usage: WizardWorkerResourceUsage) -> dict[str, object]:

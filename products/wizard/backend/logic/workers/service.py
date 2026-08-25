@@ -19,15 +19,17 @@ from products.tasks.backend.facade.sandbox import (
     get_sandbox_class,
     sandbox_repo_path,
 )
-from products.wizard.backend.logic.runs.commands import (
+from products.wizard.backend.logic.artifacts.config import (
+    PULL_REQUEST_BODY,
+    PULL_REQUEST_COMMIT_MESSAGE,
+    PULL_REQUEST_TITLE,
+)
+from products.wizard.backend.logic.workers.commands import (
     build_git_diff_command,
     build_wizard_command,
     pull_request_branch,
 )
-from products.wizard.backend.logic.runs.config import (
-    PULL_REQUEST_BODY,
-    PULL_REQUEST_COMMIT_MESSAGE,
-    PULL_REQUEST_TITLE,
+from products.wizard.backend.logic.workers.config import (
     SANDBOX_CPU_CORES,
     SANDBOX_DISK_SIZE_GB,
     SANDBOX_EXECUTION_TIMEOUT_SECONDS,
@@ -37,7 +39,7 @@ from products.wizard.backend.logic.runs.config import (
     WIZARD_ERROR_DETAIL_LENGTH,
     WIZARD_TIMEOUT_EXIT_CODE,
 )
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage, WizardWorkerUsageMeasurement
+from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage, WizardWorkerUsageMeasurement
 
 logger = logging.getLogger(__name__)
 

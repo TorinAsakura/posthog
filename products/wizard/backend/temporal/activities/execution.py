@@ -5,8 +5,8 @@ from posthog.temporal.common.utils import asyncify
 
 from products.wizard.backend.facade import api as wizard_facade
 from products.wizard.backend.facade.enums import WizardRunStage
-from products.wizard.backend.logic.runs import worker as cloud_worker
-from products.wizard.backend.logic.runs.worker import WizardExecutionRequest
+from products.wizard.backend.logic.workers import service as cloud_worker
+from products.wizard.backend.logic.workers.service import WizardExecutionRequest
 from products.wizard.backend.temporal.activities.errors import (
     WIZARD_WORKER_EXECUTION_ERROR_TYPE,
     WIZARD_WORKER_TIMEOUT_ERROR_TYPE,

@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerResourceUsage
-from products.wizard.backend.logic.runs.worker_serializers import (
+from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage
+from products.wizard.backend.logic.workers.serializers import (
     worker_resource_usage_from_record,
     worker_resource_usage_to_record,
 )

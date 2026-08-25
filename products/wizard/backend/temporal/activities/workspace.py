@@ -16,13 +16,13 @@ from products.wizard.backend.facade.errors import (
     MissingGitHubIntegrationError,
     RepositoryNotAccessibleError,
 )
-from products.wizard.backend.logic.runs import (
-    worker as cloud_worker,
-    worker_lifecycle,
-    worker_store,
-)
 from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
-from products.wizard.backend.logic.runs.worker import GitRepositoryCloneRequest, WizardWorkerProvisionRequest
+from products.wizard.backend.logic.workers import (
+    lifecycle as worker_lifecycle,
+    service as cloud_worker,
+    store as worker_store,
+)
+from products.wizard.backend.logic.workers.service import GitRepositoryCloneRequest, WizardWorkerProvisionRequest
 from products.wizard.backend.temporal.activities.errors import (
     WIZARD_REPOSITORY_ACCESS_ERROR_TYPE,
     WIZARD_RUN_CONFIGURATION_ERROR_TYPE,

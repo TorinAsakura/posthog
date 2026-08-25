@@ -6,13 +6,13 @@ from django.db import DatabaseError
 
 from products.tasks.backend.facade.sandbox import SandboxCleanupError
 from products.wizard.backend.facade.errors import WizardRunNotFoundError
-from products.wizard.backend.logic.runs import (
-    store as run_store,
-    worker as cloud_worker,
-    worker_store,
-)
+from products.wizard.backend.logic.runs import store as run_store
 from products.wizard.backend.logic.runs.errors import WizardWorkerCleanupError
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerUsageMeasurement
+from products.wizard.backend.logic.workers import (
+    service as cloud_worker,
+    store as worker_store,
+)
+from products.wizard.backend.logic.workers.contracts import WizardWorkerUsageMeasurement
 from products.wizard.backend.observability.service import wizard_observability
 
 logger = logging.getLogger(__name__)

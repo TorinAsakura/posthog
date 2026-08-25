@@ -14,8 +14,9 @@ from products.wizard.backend.facade.enums import (
     WizardWorkspaceType,
 )
 from products.wizard.backend.logic.programs import program_to_mapping
+from products.wizard.backend.logic.reconciliation import service as reconciliation
 from products.wizard.backend.logic.registry.config import POSTHOG_INTEGRATION_PROGRAM
-from products.wizard.backend.logic.runs import lifecycle, reconciliation
+from products.wizard.backend.logic.runs import lifecycle
 from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.models import WizardRun, WizardWorker
 from products.wizard.backend.temporal.errors import WizardTemporalError
@@ -42,7 +43,7 @@ def test_reconciliation_redispatches_pending_run(team, user) -> None:
     run = _create_cloud_run(team.id, user.id)
 
     with patch(
-        "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker"
+        "products.wizard.backend.logic.reconciliation.service.dispatch_created_cloud_wizard_run_to_temporal_worker"
     ) as dispatch_wizard_run:
         result = reconciliation.reconcile_pending_dispatches()
 
@@ -60,7 +61,7 @@ def test_reconciliation_continues_after_expected_dispatch_failure(team, user) ->
     _create_cloud_run(team.id, user.id)
 
     with patch(
-        "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker",
+        "products.wizard.backend.logic.reconciliation.service.dispatch_created_cloud_wizard_run_to_temporal_worker",
         side_effect=WizardRunDispatchError,
     ):
         result = reconciliation.reconcile_pending_dispatches()
@@ -79,7 +80,7 @@ def test_reconciliation_surfaces_unexpected_dispatch_failure(team, user) -> None
 
     with (
         patch(
-            "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker",
+            "products.wizard.backend.logic.reconciliation.service.dispatch_created_cloud_wizard_run_to_temporal_worker",
             side_effect=RuntimeError("bug"),
         ),
         pytest.raises(RuntimeError, match="bug"),
@@ -163,10 +164,10 @@ def test_reconciliation_destroys_pending_worker(team, user) -> None:
 
     with (
         patch(
-            "products.wizard.backend.logic.runs.worker_lifecycle.cloud_worker.measure_worker_usage",
+            "products.wizard.backend.logic.workers.lifecycle.cloud_worker.measure_worker_usage",
             return_value=None,
         ),
-        patch("products.wizard.backend.logic.runs.worker_lifecycle.cloud_worker.destroy_worker") as destroy,
+        patch("products.wizard.backend.logic.workers.lifecycle.cloud_worker.destroy_worker") as destroy,
     ):
         result = reconciliation.reconcile_pending_worker_cleanup()
 

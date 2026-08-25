@@ -7,7 +7,7 @@ from django.conf import settings
 from posthog.utils import get_instance_region
 
 from products.wizard.backend.facade.validation import is_executable_wizard_version
-from products.wizard.backend.logic.runs.config import WIZARD_TIMEOUT_SECONDS
+from products.wizard.backend.logic.workers.config import WIZARD_TIMEOUT_SECONDS
 
 _WIZARD_PROGRAM_COMMAND_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
