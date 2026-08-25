@@ -13,6 +13,7 @@ from products.wizard.backend.logic.workers import (
     store as worker_store,
 )
 from products.wizard.backend.logic.workers.contracts import WizardWorkerUsageMeasurement
+from products.wizard.backend.observability.contracts import WizardWorkerCleanupOutcome
 from products.wizard.backend.observability.service import wizard_observability
 
 logger = logging.getLogger(__name__)
@@ -52,9 +53,11 @@ def _destroy_worker(team_id: int, run_id: UUID, sandbox_id: str) -> None:
         cloud_worker.destroy_worker(sandbox_id)
     except SandboxCleanupError as error:
         _record_cleanup_failure(team_id, run_id, sandbox_id)
+        wizard_observability.worker_cleanup_finished(team_id, run_id, WizardWorkerCleanupOutcome.FAILED)
         raise WizardWorkerCleanupError from error
 
     worker_store.mark_cleaned(team_id, run_id)
+    wizard_observability.worker_cleanup_finished(team_id, run_id, WizardWorkerCleanupOutcome.SUCCEEDED)
 
 
 def _record_cleanup_failure(team_id: int, run_id: UUID, sandbox_id: str) -> None:

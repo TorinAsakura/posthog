@@ -17,6 +17,7 @@ from products.wizard.backend.logic.runs.dispatch import dispatch_created_cloud_w
 from products.wizard.backend.logic.runs.errors import WizardRunDispatchError, WizardWorkerCleanupError
 from products.wizard.backend.logic.workers import lifecycle as worker_lifecycle
 from products.wizard.backend.models import WizardRun, WizardWorker
+from products.wizard.backend.observability.service import wizard_observability
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +90,11 @@ def reconcile_expired_runs() -> ReconciliationSummary:
     reconciled = 0
     for team_id, run_id, workflow_id in expired:
         try:
-            lifecycle.fail_run(team_id, run_id, error_code=WizardRunErrorCode.TIMEOUT)
+            run = lifecycle.fail_run(team_id, run_id, error_code=WizardRunErrorCode.TIMEOUT)
         except (IllegalStatusTransitionError, WizardRunNotFoundError):
             logger.exception("wizard_run_expiration_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue
+        wizard_observability.run_past_deadline(run)
         if workflow_id is not None:
             lifecycle.request_cloud_run_cancellation(team_id, run_id)
         reconciled += 1

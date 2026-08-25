@@ -8,6 +8,11 @@ class WizardRunDispatchOutcome(StrEnum):
     FAILED = "failed"
 
 
+class WizardWorkerCleanupOutcome(StrEnum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 @frozen
 class WizardWorkerUsageObservation:
     lifetime_seconds: float

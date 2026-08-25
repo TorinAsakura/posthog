@@ -1,6 +1,7 @@
 import logging
+from uuid import UUID
 
-from products.wizard.backend.facade.contracts import WizardRunDTO, WizardRunPullRequestArtifactDTO
+from products.wizard.backend.facade.contracts import WizardRunArtifactDTO, WizardRunDTO, WizardRunPullRequestArtifactDTO
 from products.wizard.backend.facade.enums import WizardRunStatus
 from products.wizard.backend.logic.workers.contracts import WizardWorkerTelemetry
 from products.wizard.backend.observability import events, metrics
@@ -9,7 +10,7 @@ from products.wizard.backend.observability.config import (
     WIZARD_RUN_COMPLETED_EVENT,
     WIZARD_RUN_FAILED_EVENT,
 )
-from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome
+from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome, WizardWorkerCleanupOutcome
 from products.wizard.backend.observability.worker_usage import worker_usage_observation
 
 logger = logging.getLogger(__name__)
@@ -134,7 +135,20 @@ class WizardObservability:
             extra={**self._run_context(run), "size_bytes": size_bytes},
         )
 
+    def artifact_created(self, run: WizardRunDTO, artifact: WizardRunArtifactDTO) -> None:
+        try:
+            metrics.report_artifact_created(artifact)
+        except Exception:
+            logger.exception("wizard_artifact_metric_failed", extra=self._run_context(run))
+
+        logger.info(
+            "wizard_artifact_created",
+            extra={**self._run_context(run), "artifact_type": artifact.artifact_type.value},
+        )
+
     def pull_request_created(self, run: WizardRunDTO, artifact: WizardRunPullRequestArtifactDTO) -> None:
+        self.artifact_created(run, artifact)
+
         try:
             events.enqueue_pull_request_created(run)
         except Exception:
@@ -148,6 +162,33 @@ class WizardObservability:
                 "pull_request_number": artifact.number,
             },
         )
+
+    def worker_cleanup_finished(
+        self,
+        team_id: int,
+        run_id: UUID,
+        outcome: WizardWorkerCleanupOutcome,
+    ) -> None:
+        try:
+            metrics.report_worker_cleanup(outcome)
+        except Exception:
+            logger.exception(
+                "wizard_worker_cleanup_metric_failed",
+                extra={"team_id": team_id, "run_id": str(run_id), "outcome": outcome.value},
+            )
+
+        logger.info(
+            "wizard_worker_cleanup_finished",
+            extra={"team_id": team_id, "run_id": str(run_id), "outcome": outcome.value},
+        )
+
+    def run_past_deadline(self, run: WizardRunDTO) -> None:
+        try:
+            metrics.report_run_past_deadline(run)
+        except Exception:
+            logger.exception("wizard_run_deadline_metric_failed", extra=self._run_context(run))
+
+        logger.warning("wizard_run_past_deadline", extra=self._run_context(run))
 
     @staticmethod
     def _terminal_event(status: WizardRunStatus) -> str | None:

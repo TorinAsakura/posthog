@@ -1,6 +1,6 @@
 from prometheus_client import Counter, Histogram
 
-from products.wizard.backend.facade.contracts import WizardRunDTO
+from products.wizard.backend.facade.contracts import WizardRunArtifactDTO, WizardRunDTO
 from products.wizard.backend.facade.enums import WizardRunStage, WizardRunStatus
 from products.wizard.backend.observability.config import (
     WIZARD_RUN_DURATION_BUCKETS,
@@ -9,7 +9,11 @@ from products.wizard.backend.observability.config import (
     WIZARD_WORKER_LIFETIME_BUCKETS,
     WIZARD_WORKER_MEMORY_GB_SECONDS_BUCKETS,
 )
-from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome, WizardWorkerUsageObservation
+from products.wizard.backend.observability.contracts import (
+    WizardRunDispatchOutcome,
+    WizardWorkerCleanupOutcome,
+    WizardWorkerUsageObservation,
+)
 
 WIZARD_RUNS_CREATED_TOTAL = Counter(
     "posthog_wizard_runs_created_total",
@@ -51,6 +55,24 @@ WIZARD_RUN_DURATION_SECONDS = Histogram(
 WIZARD_GIT_DIFFS_OMITTED_TOTAL = Counter(
     "posthog_wizard_git_diffs_omitted_total",
     "Wizard git diff artifacts omitted because they exceeded the size limit",
+    labelnames=["environment"],
+)
+
+WIZARD_ARTIFACTS_CREATED_TOTAL = Counter(
+    "posthog_wizard_artifacts_created_total",
+    "Wizard run artifacts created",
+    labelnames=["type"],
+)
+
+WIZARD_WORKER_CLEANUPS_TOTAL = Counter(
+    "posthog_wizard_worker_cleanups_total",
+    "Wizard Worker cleanup attempts",
+    labelnames=["outcome"],
+)
+
+WIZARD_RUNS_PAST_DEADLINE_TOTAL = Counter(
+    "posthog_wizard_runs_past_deadline_total",
+    "Wizard cloud runs detected past their deadline",
     labelnames=["environment"],
 )
 
@@ -145,3 +167,15 @@ def report_worker_usage(usage: WizardWorkerUsageObservation) -> None:
 
 def report_git_diff_omitted(run: WizardRunDTO) -> None:
     WIZARD_GIT_DIFFS_OMITTED_TOTAL.labels(environment=run.environment.value).inc()
+
+
+def report_artifact_created(artifact: WizardRunArtifactDTO) -> None:
+    WIZARD_ARTIFACTS_CREATED_TOTAL.labels(type=artifact.artifact_type.value).inc()
+
+
+def report_worker_cleanup(outcome: WizardWorkerCleanupOutcome) -> None:
+    WIZARD_WORKER_CLEANUPS_TOTAL.labels(outcome=outcome.value).inc()
+
+
+def report_run_past_deadline(run: WizardRunDTO) -> None:
+    WIZARD_RUNS_PAST_DEADLINE_TOTAL.labels(environment=run.environment.value).inc()

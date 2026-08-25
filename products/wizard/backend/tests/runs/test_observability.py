@@ -12,8 +12,10 @@ from products.wizard.backend.facade.contracts import (
     GitRepositoryWorkspace,
     LocalFolderWorkspace,
     WizardRunDTO,
+    WizardRunGitDiffArtifactDTO,
 )
 from products.wizard.backend.facade.enums import (
+    WizardRunArtifactType,
     WizardRunEnvironment,
     WizardRunErrorCode,
     WizardRunStage,
@@ -24,7 +26,7 @@ from products.wizard.backend.logic.runs import dispatch, lifecycle
 from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage, WizardWorkerTelemetry
 from products.wizard.backend.observability import events, metrics, service
-from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome
+from products.wizard.backend.observability.contracts import WizardRunDispatchOutcome, WizardWorkerCleanupOutcome
 from products.wizard.backend.observability.service import WizardObservability
 from products.wizard.backend.observability.worker_usage import worker_usage_observation
 from products.wizard.backend.temporal.errors import WizardTemporalError
@@ -283,6 +285,32 @@ def test_worker_metrics_skip_unavailable_provider_usage() -> None:
 
     assert _sample("posthog_wizard_worker_cpu_usage_seconds_count") == cpu_before
     assert _sample("posthog_wizard_worker_billed_cpu_usage_seconds_count") == billed_cpu_before
+
+
+def test_reliability_metrics_record_artifacts_cleanup_and_deadlines() -> None:
+    artifact = WizardRunGitDiffArtifactDTO(
+        id=uuid4(),
+        team_id=1,
+        run_id=uuid4(),
+        artifact_type=WizardRunArtifactType.GIT_DIFF,
+        size_bytes=10,
+        content_hash="hash",
+        created_at=datetime(2026, 8, 25, 12, tzinfo=UTC),
+    )
+    artifact_labels = {"type": "git_diff"}
+    cleanup_labels = {"outcome": "succeeded"}
+    deadline_labels = {"environment": "cloud"}
+    artifact_before = _sample("posthog_wizard_artifacts_created_total", artifact_labels)
+    cleanup_before = _sample("posthog_wizard_worker_cleanups_total", cleanup_labels)
+    deadline_before = _sample("posthog_wizard_runs_past_deadline_total", deadline_labels)
+
+    metrics.report_artifact_created(artifact)
+    metrics.report_worker_cleanup(WizardWorkerCleanupOutcome.SUCCEEDED)
+    metrics.report_run_past_deadline(_cloud_run())
+
+    assert _sample("posthog_wizard_artifacts_created_total", artifact_labels) == artifact_before + 1
+    assert _sample("posthog_wizard_worker_cleanups_total", cleanup_labels) == cleanup_before + 1
+    assert _sample("posthog_wizard_runs_past_deadline_total", deadline_labels) == deadline_before + 1
 
 
 def test_stage_event_has_deterministic_identity_and_run_properties() -> None:

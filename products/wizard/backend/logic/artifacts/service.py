@@ -29,13 +29,16 @@ def create_git_diff_artifact(team_id: int, run_id: UUID, content: bytes) -> Wiza
 
     object_storage.write(storage_path, content, extras={"ContentType": GIT_DIFF_CONTENT_TYPE})
 
-    return store.upsert_git_diff(
+    artifact = store.upsert_git_diff(
         team_id=team_id,
         run_id=run.id,
         storage_path=storage_path,
         size_bytes=len(content),
         content_hash=sha256(content).hexdigest(),
     )
+
+    run_observability.artifact_created(run, artifact)
+    return artifact
 
 
 def create_pull_request_artifact(params: CreatePullRequestArtifactInput) -> WizardRunPullRequestArtifactDTO:
