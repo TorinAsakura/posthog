@@ -368,7 +368,16 @@ def get_task_sandbox_usage_by_team(begin: datetime, end: datetime) -> SandboxUsa
             user_attributed_at__isnull=False,
             user_attributed_at__lt=end,
         )
-        .filter(Q(ended_at__isnull=True, ttl_expires_at__gt=begin) | Q(ended_at__gt=begin))
+        .filter(
+            Q(ended_at__isnull=True, ttl_expires_at__gt=begin)
+            # An open hogland box extends its idle TTL on every proxied request, so
+            # ttl_expires_at can fall before the period while the box still runs. The
+            # first clause would drop it and bill zero for every later period. Keep an
+            # open hogland row for any period after it started; the loop bills it to now.
+            # Bounded by created_at so a never-closed row can't grow the scan without bound.
+            | Q(sandbox_backend="hogland", ended_at__isnull=True, created_at__lte=end)
+            | Q(ended_at__gt=begin)
+        )
     )
 
     usage: dict[int, list[float]] = {}
