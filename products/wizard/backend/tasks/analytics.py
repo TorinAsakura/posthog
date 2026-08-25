@@ -14,6 +14,7 @@ def capture_wizard_run_event(
     run_id: str,
     event: str,
     event_uuid: str,
+    properties: dict[str, str | int | float | bool | None] | None = None,
 ) -> None:
     distinct_id = str(run_id)
     if created_by_id is not None:
@@ -24,6 +25,6 @@ def capture_wizard_run_event(
         capture(
             distinct_id=distinct_id,
             event=event,
-            properties={"team_id": team_id, "wizard_run_id": str(run_id)},
+            properties={**(properties or {}), "team_id": team_id, "wizard_run_id": str(run_id)},
             uuid=event_uuid,
         )

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from products.wizard.backend.facade.enums import WizardWorkerCleanupStatus
 from products.wizard.backend.logic.runs.worker import WizardWorkerProvisioning
-from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerUsageMeasurement
+from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerTelemetry, WizardWorkerUsageMeasurement
 from products.wizard.backend.logic.runs.worker_serializers import (
     worker_resource_usage_from_record,
     worker_resource_usage_to_record,
@@ -68,4 +68,18 @@ def mark_cleaned(team_id: int, run_id: UUID) -> None:
         cleanup_status=WizardWorkerCleanupStatus.CLEANED.value,
         cleanup_error=None,
         cleaned_at=timezone.now(),
+    )
+
+
+def get_worker_telemetry(team_id: int, run_id: UUID) -> WizardWorkerTelemetry:
+    worker = (
+        WizardWorker.objects.for_team(team_id).only("created_at", "cleaned_at", "resource_usage").get(run_id=run_id)
+    )
+
+    if worker.cleaned_at is None:
+        raise ValueError("Wizard Worker has not been cleaned up")
+
+    return WizardWorkerTelemetry(
+        resource_usage=worker_resource_usage_from_record(worker.resource_usage),
+        lifetime_seconds=max((worker.cleaned_at - worker.created_at).total_seconds(), 0),
     )

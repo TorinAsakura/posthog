@@ -22,3 +22,9 @@ class WizardWorkerUsageMeasurement:
     cpu_usage_usec: int | None
     billed_cpu_usage_usec: int | None
     measured_at: datetime
+
+
+@frozen
+class WizardWorkerTelemetry:
+    resource_usage: WizardWorkerResourceUsage
+    lifetime_seconds: float

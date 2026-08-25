@@ -35,6 +35,7 @@ def test_cleanup_worker_destroys_sandbox_when_usage_persistence_fails() -> None:
         patch.object(worker_lifecycle.worker_store, "record_usage", side_effect=DatabaseError),
         patch.object(worker_lifecycle.cloud_worker, "destroy_worker") as destroy_worker,
         patch.object(worker_lifecycle.worker_store, "mark_cleaned") as mark_cleaned,
+        patch.object(worker_lifecycle, "_report_worker_usage"),
     ):
         worker_lifecycle.cleanup_worker(1, run_id, "sandbox-id")
 
@@ -56,3 +57,22 @@ def test_cleanup_worker_translates_sandbox_cleanup_failure() -> None:
             worker_lifecycle.cleanup_worker(1, run_id, "sandbox-id")
 
     mark_cleanup_failed.assert_called_once_with(1, run_id)
+
+
+def test_cleanup_worker_reports_persisted_usage_after_cleanup() -> None:
+    run_id = uuid4()
+    run = MagicMock()
+    telemetry = MagicMock()
+
+    with (
+        patch.object(worker_lifecycle.worker_store, "mark_cleanup_pending"),
+        patch.object(worker_lifecycle.cloud_worker, "measure_worker_usage", return_value=None),
+        patch.object(worker_lifecycle.cloud_worker, "destroy_worker"),
+        patch.object(worker_lifecycle.worker_store, "mark_cleaned"),
+        patch.object(worker_lifecycle.run_store, "get_run", return_value=run),
+        patch.object(worker_lifecycle.worker_store, "get_worker_telemetry", return_value=telemetry),
+        patch.object(worker_lifecycle.wizard_observability, "worker_usage_recorded") as worker_usage_recorded,
+    ):
+        worker_lifecycle.cleanup_worker(1, run_id, "sandbox-id")
+
+    worker_usage_recorded.assert_called_once_with(run, telemetry)

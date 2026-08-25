@@ -40,7 +40,7 @@ from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
 from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
 from products.wizard.backend.logic.runs.transitions import transition
-from products.wizard.backend.observability import service as run_observability
+from products.wizard.backend.observability.service import wizard_observability as run_observability
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +129,15 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
     if is_cloud_run:
         result = WizardRunCreationResult(run=store.get_run(params.team_id, result.run.id), created=result.created)
 
-    if result.created:
+    if result.created and not is_cloud_run:
         run_observability.run_created(result.run)
 
     return result
 
 
 def _dispatch_cloud_run(team_id: int, run_id: UUID) -> None:
+    run_observability.run_created(store.get_run(team_id, run_id))
+
     try:
         dispatch_wizard_run_to_temporal_worker(team_id, run_id)
 
@@ -190,7 +192,13 @@ def update_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> Wizar
     if run.status not in (WizardRunStatus.CREATED, WizardRunStatus.RUNNING):
         raise IllegalStatusTransitionError
 
-    return store.set_run_stage(team_id, run_id, stage)
+    if run.stage == stage:
+        return run
+
+    run = store.set_run_stage(team_id, run_id, stage)
+    run_observability.stage_entered(run)
+
+    return run
 
 
 def transition_run(

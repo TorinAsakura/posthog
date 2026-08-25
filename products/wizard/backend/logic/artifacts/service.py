@@ -12,7 +12,7 @@ from products.wizard.backend.facade.contracts import (
 from products.wizard.backend.logic.artifacts import store
 from products.wizard.backend.logic.artifacts.config import GIT_DIFF_CONTENT_TYPE, MAX_GIT_DIFF_BYTES
 from products.wizard.backend.logic.runs import store as run_store
-from products.wizard.backend.observability import service as run_observability
+from products.wizard.backend.observability.service import wizard_observability as run_observability
 
 
 def create_git_diff_artifact(team_id: int, run_id: UUID, content: bytes) -> WizardRunGitDiffArtifactDTO | None:
