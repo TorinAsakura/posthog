@@ -58,6 +58,11 @@ WIZARD_GIT_DIFFS_OMITTED_TOTAL = Counter(
     labelnames=["environment"],
 )
 
+WIZARD_HANDOFF_BODY_FALLBACKS_TOTAL = Counter(
+    "posthog_wizard_handoff_body_fallbacks_total",
+    "Wizard pull requests that used the generic body because the handoff document was unavailable",
+)
+
 WIZARD_ARTIFACTS_CREATED_TOTAL = Counter(
     "posthog_wizard_artifacts_created_total",
     "Wizard run artifacts created",
@@ -167,6 +172,10 @@ def report_worker_usage(usage: WizardWorkerUsageObservation) -> None:
 
 def report_git_diff_omitted(run: WizardRunDTO) -> None:
     WIZARD_GIT_DIFFS_OMITTED_TOTAL.labels(environment=run.environment.value).inc()
+
+
+def report_handoff_body_fallback() -> None:
+    WIZARD_HANDOFF_BODY_FALLBACKS_TOTAL.inc()
 
 
 def report_artifact_created(artifact: WizardRunArtifactDTO) -> None:

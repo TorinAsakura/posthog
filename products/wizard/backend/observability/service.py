@@ -135,6 +135,20 @@ class WizardObservability:
             extra={**self._run_context(run), "size_bytes": size_bytes},
         )
 
+    def handoff_body_fallback(self, team_id: int, run_id: UUID) -> None:
+        try:
+            metrics.report_handoff_body_fallback()
+        except (RuntimeError, ValueError):
+            logger.exception(
+                "wizard_handoff_body_fallback_metric_failed",
+                extra={"team_id": team_id, "run_id": str(run_id)},
+            )
+
+        logger.warning(
+            "wizard_handoff_body_fallback",
+            extra={"team_id": team_id, "run_id": str(run_id)},
+        )
+
     def artifact_created(self, run: WizardRunDTO, artifact: WizardRunArtifactDTO) -> None:
         try:
             metrics.report_artifact_created(artifact)

@@ -243,7 +243,9 @@ def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
 @patch("products.wizard.backend.logic.workers.service.repository_facade.create_pull_request")
 @patch("products.wizard.backend.logic.workers.service.repository_facade.create_signed_commit")
 @patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
+@patch("products.wizard.backend.logic.workers.service.wizard_observability.handoff_body_fallback")
 def test_git_repository_handoff_uses_generic_body_when_handoff_is_unavailable(
+    handoff_body_fallback: MagicMock,
     get_sandbox_class: MagicMock,
     create_signed_commit: MagicMock,
     create_pull_request: MagicMock,
@@ -265,6 +267,7 @@ def test_git_repository_handoff_uses_generic_body_when_handoff_is_unavailable(
     assert create_pull_request.call_args.kwargs["body"] == (
         "This pull request contains changes created by Wizard, PostHog's setup agent."
     )
+    handoff_body_fallback.assert_called_once_with(request.team_id, request.run_id)
 
 
 @patch("products.wizard.backend.logic.workers.service.repository_facade.create_pull_request")

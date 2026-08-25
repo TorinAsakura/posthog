@@ -43,6 +43,7 @@ from products.wizard.backend.logic.workers.config import (
     WIZARD_TIMEOUT_EXIT_CODE,
 )
 from products.wizard.backend.logic.workers.contracts import WizardWorkerResourceUsage, WizardWorkerUsageMeasurement
+from products.wizard.backend.observability.service import wizard_observability
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,11 @@ def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> Wizar
         return WizardWorkerResult(diff=diff, pull_request=None)
 
     branch = pull_request_branch(request.run_id)
-    handoff_body = _read_handoff_body(sandbox, request.run_id) or PULL_REQUEST_BODY
+    handoff_body = _read_handoff_body(sandbox, request.run_id)
+
+    if handoff_body is None:
+        wizard_observability.handoff_body_fallback(request.team_id, request.run_id)
+        handoff_body = PULL_REQUEST_BODY
 
     try:
         repository_facade.create_signed_commit(
