@@ -181,7 +181,7 @@ class TestFullRefreshTableOwnership:
     async def test_a_full_refresh_refuses_to_replace_a_table_it_did_not_create(self, dsn, table_name) -> None:
         with psycopg.connect(dsn, autocommit=True) as conn:
             conn.execute(f'CREATE TABLE public."{table_name}" (id BIGINT, name TEXT)')
-            conn.execute(f'INSERT INTO public."{table_name}" VALUES (99, \'untouched\')')
+            conn.execute(f"INSERT INTO public.\"{table_name}\" VALUES (99, 'untouched')")
 
         ctx = _ctx(table_name, "full_refresh")
         writer = LocalPostgresWriter(ctx, dsn)

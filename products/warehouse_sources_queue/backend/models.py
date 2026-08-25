@@ -1,6 +1,5 @@
 from django.db import models
 
-from posthog.models.scoping.product_mixin import ProductTeamModel
 from posthog.models.utils import UUIDModel, sane_repr
 
 

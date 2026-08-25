@@ -456,11 +456,15 @@ class PostgresDestinationWriter:
 
     async def _mark_owned(self, client: PostgreSQLClient, table: str) -> None:
         async with self._write_cursor(client) as cursor:
+            # `COMMENT ON TABLE ... IS <text>` is a utility statement: Postgres's grammar
+            # only accepts a string literal there, not a bind parameter, so this can't go
+            # through the usual `%s` placeholder (it fails with a syntax error at `$1`).
+            # `_OWNERSHIP_COMMENT` is a fixed constant, never user input, so inlining it as
+            # a literal is safe.
             await cursor.execute(
-                sql.SQL("COMMENT ON TABLE {}.{} IS %s").format(
-                    sql.Identifier(self._schema), sql.Identifier(table)
-                ),
-                (_OWNERSHIP_COMMENT,),
+                sql.SQL("COMMENT ON TABLE {}.{} IS {}").format(
+                    sql.Identifier(self._schema), sql.Identifier(table), sql.Literal(_OWNERSHIP_COMMENT)
+                )
             )
 
     async def _is_owned(self, client: PostgreSQLClient, table: str) -> bool:
@@ -490,9 +494,7 @@ class PostgresDestinationWriter:
                 # Already swapped by an earlier attempt at this same final batch.
                 return
 
-            if await self._table_exists(client, ctx.table_name) and not await self._is_owned(
-                client, ctx.table_name
-            ):
+            if await self._table_exists(client, ctx.table_name) and not await self._is_owned(client, ctx.table_name):
                 # A table with this name exists and this writer never created it. Refuse
                 # rather than drop it: `table_name` comes from the source's resource name,
                 # which a custom-source manifest controls, and a table that predates this
