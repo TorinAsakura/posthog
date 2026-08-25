@@ -189,6 +189,7 @@ def request_cloud_run_cancellation(team_id: int, run_id: UUID) -> None:
 def update_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:
     with database_transaction.atomic():
         run = store.get_run_for_update(team_id, run_id)
+        previous = run
 
         if run.status not in (WizardRunStatus.CREATED, WizardRunStatus.RUNNING):
             raise IllegalStatusTransitionError
@@ -198,7 +199,7 @@ def update_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> Wizar
 
         run = store.set_run_stage(team_id, run_id, stage)
 
-    run_observability.stage_entered(run)
+    run_observability.stage_changed(previous, run)
 
     return run
 

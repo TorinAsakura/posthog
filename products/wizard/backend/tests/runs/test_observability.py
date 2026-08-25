@@ -186,6 +186,27 @@ def test_dispatch_and_stage_metrics_record_funnel() -> None:
     assert _sample("posthog_wizard_run_stage_entered_total", stage_labels) == stage_before + 1
 
 
+def test_active_cloud_run_metric_tracks_status_and_stage() -> None:
+    created = _cloud_run()
+    running = replace(
+        created,
+        status=WizardRunStatus.RUNNING,
+        stage=WizardRunStage.PROVISIONING,
+    )
+    completed = replace(running, status=WizardRunStatus.COMPLETED, stage=None)
+    created_labels = {"status": "created", "stage": "dispatching"}
+    provisioning_labels = {"status": "running", "stage": "provisioning"}
+    created_before = _sample("posthog_wizard_cloud_runs_active", created_labels)
+    provisioning_before = _sample("posthog_wizard_cloud_runs_active", provisioning_labels)
+
+    metrics.report_run_created(created)
+    metrics.report_run_status_changed(created, running)
+    metrics.report_run_status_changed(running, completed)
+
+    assert _sample("posthog_wizard_cloud_runs_active", created_labels) == created_before
+    assert _sample("posthog_wizard_cloud_runs_active", provisioning_labels) == provisioning_before
+
+
 def test_failure_metrics_record_stage_and_error_code() -> None:
     run = replace(
         _cloud_run(),

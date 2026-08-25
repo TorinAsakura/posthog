@@ -1,7 +1,7 @@
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 from products.wizard.backend.facade.contracts import WizardRunArtifactDTO, WizardRunDTO
-from products.wizard.backend.facade.enums import WizardRunStage, WizardRunStatus
+from products.wizard.backend.facade.enums import WizardRunEnvironment, WizardRunStage, WizardRunStatus
 from products.wizard.backend.observability.config import (
     WIZARD_RUN_DURATION_BUCKETS,
     WIZARD_WORKER_CPU_SECONDS_BUCKETS,
@@ -25,6 +25,12 @@ WIZARD_RUN_DISPATCH_ATTEMPTS_TOTAL = Counter(
     "posthog_wizard_run_dispatch_attempts_total",
     "Wizard cloud run dispatch attempts",
     labelnames=["outcome"],
+)
+
+WIZARD_CLOUD_RUNS_ACTIVE = Gauge(
+    "posthog_wizard_cloud_runs_active",
+    "Wizard cloud runs that have not reached a terminal status",
+    labelnames=["status", "stage"],
 )
 
 WIZARD_RUN_STAGE_ENTERED_TOTAL = Counter(
@@ -121,6 +127,9 @@ WIZARD_WORKER_ALLOCATED_DISK_GB_SECONDS = Histogram(
 def report_run_created(run: WizardRunDTO) -> None:
     WIZARD_RUNS_CREATED_TOTAL.labels(environment=run.environment.value).inc()
 
+    if run.environment == WizardRunEnvironment.CLOUD and run.stage is not None:
+        WIZARD_CLOUD_RUNS_ACTIVE.labels(status=run.status.value, stage=run.stage.value).inc()
+
 
 def report_dispatch_finished(outcome: WizardRunDispatchOutcome) -> None:
     WIZARD_RUN_DISPATCH_ATTEMPTS_TOTAL.labels(outcome=outcome.value).inc()
@@ -128,6 +137,24 @@ def report_dispatch_finished(outcome: WizardRunDispatchOutcome) -> None:
 
 def report_stage_entered(stage: WizardRunStage) -> None:
     WIZARD_RUN_STAGE_ENTERED_TOTAL.labels(stage=stage.value).inc()
+
+
+def report_run_stage_changed(previous: WizardRunDTO, current: WizardRunDTO) -> None:
+    if previous.environment != WizardRunEnvironment.CLOUD or previous.stage is None or current.stage is None:
+        return
+
+    WIZARD_CLOUD_RUNS_ACTIVE.labels(status=previous.status.value, stage=previous.stage.value).dec()
+    WIZARD_CLOUD_RUNS_ACTIVE.labels(status=current.status.value, stage=current.stage.value).inc()
+
+
+def report_run_status_changed(previous: WizardRunDTO, current: WizardRunDTO) -> None:
+    if previous.environment != WizardRunEnvironment.CLOUD or previous.stage is None:
+        return
+
+    WIZARD_CLOUD_RUNS_ACTIVE.labels(status=previous.status.value, stage=previous.stage.value).dec()
+
+    if current.stage is not None:
+        WIZARD_CLOUD_RUNS_ACTIVE.labels(status=current.status.value, stage=current.stage.value).inc()
 
 
 def report_run_finished(run: WizardRunDTO, failure_stage: WizardRunStage | None) -> None:

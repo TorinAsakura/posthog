@@ -70,7 +70,21 @@ class WizardObservability:
             extra={**self._run_context(run), "stage": run.stage.value},
         )
 
+    def stage_changed(self, previous: WizardRunDTO, current: WizardRunDTO) -> None:
+        self.stage_entered(current)
+
+        try:
+            metrics.report_run_stage_changed(previous, current)
+        except ValueError:
+            logger.exception("wizard_run_stage_active_metric_failed", extra=self._run_context(current))
+
     def run_transitioned(self, previous: WizardRunDTO, current: WizardRunDTO) -> None:
+        if previous.status != current.status:
+            try:
+                metrics.report_run_status_changed(previous, current)
+            except ValueError:
+                logger.exception("wizard_run_status_active_metric_failed", extra=self._run_context(current))
+
         event = self._terminal_event(current.status)
 
         if event is None or previous.status == current.status:
