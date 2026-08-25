@@ -762,6 +762,9 @@ export const logsViewerDataLogic = kea<logsViewerDataLogicType>([
                             filterGroup: values.queryFilterGroup as PropertyGroupFilter,
                             severityLevels: values.filters.severityLevels,
                             serviceNames: values.filters.serviceNames,
+                            // The severity result key, colors, and live-tail merge all assume a
+                            // severity breakdown, so state it rather than lean on the server default.
+                            sparklineBreakdownBy: 'severity',
                             personId: values.personId,
                         },
                         signal,
@@ -1223,7 +1226,6 @@ export const logsViewerDataLogic = kea<logsViewerDataLogicType>([
                 }
             }
         },
-        // insert logs into the sparkline data
         addLogsToSparkline: (logs: LogMessage[]) => {
             // if the sparkline hasn't loaded do nothing.
             if (!values.sparkline || values.sparkline.length < 2) {
