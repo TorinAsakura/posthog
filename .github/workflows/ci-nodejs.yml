@@ -554,8 +554,8 @@ jobs:
               if: ${{ !cancelled() && github.ref == 'refs/heads/master' }}
               uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
               with:
-                   path: nodejs/.tmp/hog-bytecode.json
-                   key: hog-bytecode-${{ matrix.shard }}-${{ steps.hog-compiler.outputs.hash }}-${{ github.sha }}
+                  path: nodejs/.tmp/hog-bytecode.json
+                  key: hog-bytecode-${{ matrix.shard }}-${{ steps.hog-compiler.outputs.hash }}-${{ github.sha }}
 
             # Best-effort Trunk upload (continue-on-error); the "Fail on test failure" step below is
             # the verdict, so a Trunk outage can't red a passing shard. Internal PRs only (needs the
