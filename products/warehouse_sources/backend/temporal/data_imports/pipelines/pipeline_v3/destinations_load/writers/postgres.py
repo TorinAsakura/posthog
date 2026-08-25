@@ -59,6 +59,19 @@ from products.warehouse_sources.backend.temporal.data_imports.pipelines.pipeline
 # what its previous attempt wrote instead of the whole staging table.
 BATCH_INDEX_COLUMN = "_ph_batch_index"
 
+# Set on a full refresh's staging table as soon as it exists, and carried across the final
+# rename because a Postgres comment follows the table's OID, not its name. `finalize_run`
+# checks for this before it ever drops something named after the destination's live table, so
+# a full refresh can only ever replace a table this writer created. `table_name` is derived
+# from the source's resource name (see `delivery.py`), which a custom-source manifest
+# controls; without this check, naming a resource after an unrelated table already sitting in
+# the destination schema would be enough to have it dropped on the next sync.
+_OWNERSHIP_COMMENT = "posthog-warehouse-sync-owned"
+
+
+class UnrelatedTableExistsError(RuntimeError):
+    """A full refresh would have replaced a table this writer never created."""
+
 
 def staging_table_name(ctx: DestinationRunContext) -> str:
     # Run-scoped, so two runs of the same table never share a staging table. Postgres caps
@@ -247,6 +260,9 @@ class PostgresDestinationWriter:
                         # This batch may be a re-apply after a crash, so clear whatever its
                         # previous attempt wrote before writing it again.
                         await self._delete_batch_rows(client, target, ctx.batch_index)
+                        # Marked on the staging table, not the live one: the comment survives
+                        # the rename in `finalize_run`, which is where it gets checked.
+                        await self._mark_owned(client, target)
                     first = False
 
                 rows_written += await self._write_record_batch(client, target, batch, ctx, full_refresh=full_refresh)
@@ -418,6 +434,30 @@ class PostgresDestinationWriter:
             wanted = sorted(columns)
             return any(sorted(row[0] or []) == wanted for row in await cursor.fetchall())
 
+    async def _mark_owned(self, client: PostgreSQLClient, table: str) -> None:
+        async with self._write_cursor(client) as cursor:
+            await cursor.execute(
+                sql.SQL("COMMENT ON TABLE {}.{} IS %s").format(
+                    sql.Identifier(self._schema), sql.Identifier(table)
+                ),
+                (_OWNERSHIP_COMMENT,),
+            )
+
+    async def _is_owned(self, client: PostgreSQLClient, table: str) -> bool:
+        async with client.connection.cursor() as cursor:
+            await cursor.execute(
+                """
+                SELECT d.description
+                FROM pg_catalog.pg_description d
+                JOIN pg_catalog.pg_class c ON c.oid = d.objoid AND d.objsubid = 0
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relname = %(table)s AND n.nspname = %(schema)s
+                """,
+                {"table": table, "schema": self._schema},
+            )
+            row = await cursor.fetchone()
+            return row is not None and row[0] == _OWNERSHIP_COMMENT
+
     async def finalize_run(self, ctx: DestinationRunContext) -> None:
         """Publish a full refresh by swapping the staging table into place."""
         if not ctx.is_full_refresh:
@@ -429,6 +469,18 @@ class PostgresDestinationWriter:
             if not await self._table_exists(client, staging):
                 # Already swapped by an earlier attempt at this same final batch.
                 return
+
+            if await self._table_exists(client, ctx.table_name) and not await self._is_owned(
+                client, ctx.table_name
+            ):
+                # A table with this name exists and this writer never created it. Refuse
+                # rather than drop it: `table_name` comes from the source's resource name,
+                # which a custom-source manifest controls, and a table that predates this
+                # sync could be anything the customer already had in this schema.
+                raise UnrelatedTableExistsError(
+                    f'"{self._schema}"."{ctx.table_name}" already exists and was not created by this sync; '
+                    "refusing to replace it with the full refresh's staging table."
+                )
 
             async with self._write_cursor(client) as cursor:
                 await cursor.execute(

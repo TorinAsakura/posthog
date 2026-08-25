@@ -16,6 +16,7 @@ from products.warehouse_sources.backend.temporal.data_imports.destinations.contr
 )
 from products.warehouse_sources.backend.temporal.data_imports.pipelines.pipeline_v3.destinations_load.writers.postgres import (
     PostgresDestinationWriter,
+    UnrelatedTableExistsError,
     staging_table_name,
 )
 
@@ -167,6 +168,57 @@ class TestFullRefresh:
             await second_writer.abort_run(second)
 
             assert _read(dsn, table_name) == [(1, "old")]
+        finally:
+            _drop(dsn, table_name, staging_table_name(first), staging_table_name(second))
+
+
+class TestFullRefreshTableOwnership:
+    """`table_name` is derived from the source's resource name, which a custom-source
+    manifest controls. A full refresh must never take over a table it did not create just
+    because a resource happens to be named after it.
+    """
+
+    async def test_a_full_refresh_refuses_to_replace_a_table_it_did_not_create(self, dsn, table_name) -> None:
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            conn.execute(f'CREATE TABLE public."{table_name}" (id BIGINT, name TEXT)')
+            conn.execute(f'INSERT INTO public."{table_name}" VALUES (99, \'untouched\')')
+
+        ctx = _ctx(table_name, "full_refresh")
+        writer = LocalPostgresWriter(ctx, dsn)
+        try:
+            await writer.write_batch(
+                _batches(_rows(["a"], [1])),
+                DestinationBatchContext(run=ctx, batch_index=0, is_final_batch=True),
+            )
+
+            with pytest.raises(UnrelatedTableExistsError):
+                await writer.finalize_run(ctx)
+
+            # The pre-existing table was never touched, and the staging table is still there
+            # for a retry to pick up once the name collision is resolved.
+            assert _read(dsn, table_name) == [(99, "untouched")]
+        finally:
+            _drop(dsn, table_name, staging_table_name(ctx))
+
+    async def test_a_second_full_refresh_may_replace_a_table_the_first_one_created(self, dsn, table_name) -> None:
+        first = _ctx(table_name, "full_refresh")
+        first_writer = LocalPostgresWriter(first, dsn)
+        second = _ctx(table_name, "full_refresh")
+        second_writer = LocalPostgresWriter(second, dsn)
+        try:
+            await first_writer.write_batch(
+                _batches(_rows(["old"], [1])),
+                DestinationBatchContext(run=first, batch_index=0, is_final_batch=True),
+            )
+            await first_writer.finalize_run(first)
+
+            await second_writer.write_batch(
+                _batches(_rows(["new"], [2])),
+                DestinationBatchContext(run=second, batch_index=0, is_final_batch=True),
+            )
+            await second_writer.finalize_run(second)
+
+            assert _read(dsn, table_name) == [(2, "new")]
         finally:
             _drop(dsn, table_name, staging_table_name(first), staging_table_name(second))
 
