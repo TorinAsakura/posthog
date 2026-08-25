@@ -1,10 +1,16 @@
 import logging
 from uuid import UUID
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import DatabaseError
+
+from products.tasks.backend.facade.sandbox import SandboxCleanupError
 from products.wizard.backend.logic.runs import (
     worker as cloud_worker,
     worker_store,
 )
+from products.wizard.backend.logic.runs.errors import WizardWorkerCleanupError
+from products.wizard.backend.logic.runs.worker_contracts import WizardWorkerUsageMeasurement
 
 logger = logging.getLogger(__name__)
 
@@ -12,27 +18,45 @@ logger = logging.getLogger(__name__)
 def cleanup_worker(team_id: int, run_id: UUID, sandbox_id: str) -> None:
     worker_store.mark_cleanup_pending(team_id, run_id)
 
-    usage = cloud_worker.measure_worker_usage(sandbox_id)
+    try:
+        usage = cloud_worker.measure_worker_usage(sandbox_id)
 
-    if usage is not None:
-        try:
-            worker_store.record_usage(team_id, run_id, usage)
-        except Exception:
-            logger.exception(
-                "wizard_worker_usage_recording_failed",
-                extra={"team_id": team_id, "run_id": str(run_id), "sandbox_id": sandbox_id},
-            )
+        if usage is not None:
+            _record_worker_usage(team_id, run_id, sandbox_id, usage)
+    finally:
+        _destroy_worker(team_id, run_id, sandbox_id)
 
+
+def _record_worker_usage(
+    team_id: int,
+    run_id: UUID,
+    sandbox_id: str,
+    usage: WizardWorkerUsageMeasurement,
+) -> None:
+    try:
+        worker_store.record_usage(team_id, run_id, usage)
+    except (DatabaseError, ObjectDoesNotExist, ValueError):
+        logger.exception(
+            "wizard_worker_usage_recording_failed",
+            extra={"team_id": team_id, "run_id": str(run_id), "sandbox_id": sandbox_id},
+        )
+
+
+def _destroy_worker(team_id: int, run_id: UUID, sandbox_id: str) -> None:
     try:
         cloud_worker.destroy_worker(sandbox_id)
-    except Exception:
-        try:
-            worker_store.mark_cleanup_failed(team_id, run_id)
-        except Exception:
-            logger.exception(
-                "wizard_worker_cleanup_failure_recording_failed",
-                extra={"team_id": team_id, "run_id": str(run_id), "sandbox_id": sandbox_id},
-            )
-        raise
+    except SandboxCleanupError as error:
+        _record_cleanup_failure(team_id, run_id, sandbox_id)
+        raise WizardWorkerCleanupError from error
 
     worker_store.mark_cleaned(team_id, run_id)
+
+
+def _record_cleanup_failure(team_id: int, run_id: UUID, sandbox_id: str) -> None:
+    try:
+        worker_store.mark_cleanup_failed(team_id, run_id)
+    except DatabaseError:
+        logger.exception(
+            "wizard_worker_cleanup_failure_recording_failed",
+            extra={"team_id": team_id, "run_id": str(run_id), "sandbox_id": sandbox_id},
+        )

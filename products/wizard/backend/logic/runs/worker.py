@@ -13,7 +13,9 @@ from products.tasks.backend.facade import repository as repository_facade
 from products.tasks.backend.facade.repo_selection import get_github_token
 from products.tasks.backend.facade.sandbox import (
     SandboxConfig,
+    SandboxExecutionError,
     SandboxNotFoundError,
+    SandboxTimeoutError,
     get_sandbox_class,
     sandbox_repo_path,
 )
@@ -210,7 +212,7 @@ def measure_worker_usage(sandbox_id: str) -> WizardWorkerUsageMeasurement | None
         sandbox = get_sandbox_class().get_by_id(sandbox_id)
         cpu_usage_usec = sandbox.read_cpu_usage_usec()
         billed_cpu_usage_usec = sandbox.read_billed_cpu_usage_usec()
-    except Exception:
+    except (SandboxExecutionError, SandboxNotFoundError, SandboxTimeoutError):
         logger.exception("wizard_worker_usage_measurement_failed", extra={"sandbox_id": sandbox_id})
         return None
 
