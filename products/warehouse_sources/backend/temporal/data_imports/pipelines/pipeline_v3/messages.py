@@ -10,7 +10,7 @@ from products.warehouse_sources.backend.temporal.data_imports.sources.common.typ
 SyncTypeLiteral = Literal["full_refresh", "incremental", "append", "cdc"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExportSignalMessage:
     """One extracted batch's hand-off from the extraction side to the load consumer.
 
