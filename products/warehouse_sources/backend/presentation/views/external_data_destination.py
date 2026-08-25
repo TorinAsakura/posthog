@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import Q
 
@@ -159,7 +159,9 @@ class ExternalDataDestinationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewS
                 raise PermissionDenied("You do not have editor access to every table wired to this destination.")
 
     def perform_update(self, serializer: serializers.BaseSerializer) -> None:
-        self._assert_can_mutate(serializer.instance)
+        # `.instance` is `Any | None` on the base serializer type, but `update`/`partial_update`
+        # always construct this viewset's serializer with the existing instance to update.
+        self._assert_can_mutate(cast(ExternalDataDestination, serializer.instance))
         super().perform_update(serializer)
 
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
