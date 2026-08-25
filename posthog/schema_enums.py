@@ -1165,6 +1165,11 @@ class ErrorTrackingQueryIssueSeverity(StrEnum):
     CRITICAL = "critical"
 
 
+class ErrorTrackingReleasesOrderBy(StrEnum):
+    LATEST = "latest"
+    OCCURRENCES = "occurrences"
+
+
 class EvaluationRuntime(StrEnum):
     HOG = "hog"
     LLM_JUDGE = "llm_judge"
@@ -3317,6 +3322,7 @@ class NodeKind(StrEnum):
     ERROR_TRACKING_SIMILAR_ISSUES_QUERY = "ErrorTrackingSimilarIssuesQuery"
     ERROR_TRACKING_FINGERPRINT_PROJECTION_QUERY = "ErrorTrackingFingerprintProjectionQuery"
     ERROR_TRACKING_BREAKDOWNS_QUERY = "ErrorTrackingBreakdownsQuery"
+    ERROR_TRACKING_RELEASES_QUERY = "ErrorTrackingReleasesQuery"
     ERROR_TRACKING_ISSUE_CORRELATION_QUERY = "ErrorTrackingIssueCorrelationQuery"
     LOGS_QUERY = "LogsQuery"
     LOG_ATTRIBUTES_QUERY = "LogAttributesQuery"
