@@ -11,8 +11,7 @@ from products.wizard.backend.temporal.contracts import WizardRunActivityInput
 from products.wizard.backend.temporal.errors import WizardTemporalError
 
 
-def dispatch_wizard_run_to_temporal_worker(team_id: int, run_id: UUID) -> None:
-    # review: i understand this is done to make sure the run exists, but the logic should be explicit, and implicit in the function call
+def dispatch_created_cloud_wizard_run_to_temporal_worker(team_id: int, run_id: UUID) -> None:
     run = store.get_run(team_id, run_id)
 
     if run.environment != WizardRunEnvironment.CLOUD or run.status != WizardRunStatus.CREATED:

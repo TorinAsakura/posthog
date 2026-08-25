@@ -13,7 +13,7 @@ from products.wizard.backend.facade.enums import (
 from products.wizard.backend.facade.errors import IllegalStatusTransitionError, WizardRunNotFoundError
 from products.wizard.backend.logic.runs import cancellation, lifecycle, worker_lifecycle
 from products.wizard.backend.logic.runs.config import RECONCILIATION_BATCH_SIZE
-from products.wizard.backend.logic.runs.dispatch import dispatch_wizard_run_to_temporal_worker
+from products.wizard.backend.logic.runs.dispatch import dispatch_created_cloud_wizard_run_to_temporal_worker
 from products.wizard.backend.logic.runs.errors import WizardRunDispatchError, WizardWorkerCleanupError
 from products.wizard.backend.models import WizardRun, WizardWorker
 
@@ -50,7 +50,7 @@ def reconcile_pending_dispatches() -> ReconciliationSummary:
     reconciled = 0
     for team_id, run_id in pending:
         try:
-            dispatch_wizard_run_to_temporal_worker(team_id, run_id)
+            dispatch_created_cloud_wizard_run_to_temporal_worker(team_id, run_id)
         except (WizardRunDispatchError, WizardRunNotFoundError):
             logger.exception("wizard_run_redispatch_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue

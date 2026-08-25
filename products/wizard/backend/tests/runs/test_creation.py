@@ -173,7 +173,7 @@ def test_cloud_run_dispatches_after_persistence(team, user) -> None:
             return_value=True,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker"
+            "products.wizard.backend.logic.runs.lifecycle.dispatch_created_cloud_wizard_run_to_temporal_worker"
         ) as dispatch_wizard_run,
     ):
         run = wizard_facade.create_run(
@@ -237,7 +237,9 @@ def test_cloud_run_rollback_prevents_dispatch(team, user) -> None:
             "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
-        patch("products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker") as dispatch,
+        patch(
+            "products.wizard.backend.logic.runs.lifecycle.dispatch_created_cloud_wizard_run_to_temporal_worker"
+        ) as dispatch,
         transaction.atomic(),
     ):
         wizard_facade.create_run(
@@ -257,7 +259,9 @@ def test_cloud_run_rollback_prevents_dispatch(team, user) -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_local_run_does_not_dispatch(team, user) -> None:
-    with patch("products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker") as dispatch:
+    with patch(
+        "products.wizard.backend.logic.runs.lifecycle.dispatch_created_cloud_wizard_run_to_temporal_worker"
+    ) as dispatch:
         wizard_facade.create_run(
             CreateWizardRunInput(
                 team_id=team.id,

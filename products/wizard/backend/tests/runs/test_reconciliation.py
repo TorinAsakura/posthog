@@ -42,7 +42,7 @@ def test_reconciliation_redispatches_pending_run(team, user) -> None:
     run = _create_cloud_run(team.id, user.id)
 
     with patch(
-        "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker"
+        "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker"
     ) as dispatch_wizard_run:
         result = reconciliation.reconcile_pending_dispatches()
 
@@ -60,7 +60,7 @@ def test_reconciliation_continues_after_expected_dispatch_failure(team, user) ->
     _create_cloud_run(team.id, user.id)
 
     with patch(
-        "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker",
+        "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker",
         side_effect=WizardRunDispatchError,
     ):
         result = reconciliation.reconcile_pending_dispatches()
@@ -79,7 +79,7 @@ def test_reconciliation_surfaces_unexpected_dispatch_failure(team, user) -> None
 
     with (
         patch(
-            "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker",
+            "products.wizard.backend.logic.runs.reconciliation.dispatch_created_cloud_wizard_run_to_temporal_worker",
             side_effect=RuntimeError("bug"),
         ),
         pytest.raises(RuntimeError, match="bug"),

@@ -210,7 +210,7 @@ def test_dispatch_reports_success() -> None:
         patch.object(dispatch.store, "mark_dispatch_succeeded"),
         patch.object(dispatch.wizard_observability, "dispatch_finished") as dispatch_finished,
     ):
-        dispatch.dispatch_wizard_run_to_temporal_worker(run.team_id, run.id)
+        dispatch.dispatch_created_cloud_wizard_run_to_temporal_worker(run.team_id, run.id)
 
     dispatch_finished.assert_called_once_with(run, WizardRunDispatchOutcome.SUCCEEDED)
 
@@ -229,7 +229,7 @@ def test_dispatch_reports_failure() -> None:
         patch.object(dispatch.wizard_observability, "dispatch_finished") as dispatch_finished,
         pytest.raises(WizardRunDispatchError),
     ):
-        dispatch.dispatch_wizard_run_to_temporal_worker(run.team_id, run.id)
+        dispatch.dispatch_created_cloud_wizard_run_to_temporal_worker(run.team_id, run.id)
 
     dispatch_finished.assert_called_once_with(run, WizardRunDispatchOutcome.FAILED)
 
