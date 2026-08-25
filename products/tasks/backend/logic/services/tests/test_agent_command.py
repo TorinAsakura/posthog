@@ -509,6 +509,25 @@ class TestSandboxTransportToken:
         else:
             assert (token, param) == ("m", "_modal_connect_token")
 
+    @override_settings(DEBUG=False)
+    @pytest.mark.parametrize(
+        "hogland_api_url,sandbox_url",
+        [
+            ("http://localhost:8010", "http://localhost:8010/v1/hogboxes/hb-1/proxy/8080"),
+            ("http://127.0.0.1:8010", "http://127.0.0.1:8010/v1/hogboxes/hb-1/proxy/8080"),
+        ],
+        ids=["loopback_localhost", "loopback_127"],
+    )
+    def test_loopback_http_withholds_the_bearer_outside_debug(self, hogland_api_url, sandbox_url):
+        # pytest.ini forces DEBUG=1, so the DEBUG=True case above cannot prove the gate.
+        # Flip DEBUG off and the loopback-http exception must close: even a loopback origin
+        # falls back to the modal token rather than the account-wide bearer.
+        with override_settings(HOGLAND_API_TOKEN="hog-tok", HOGLAND_API_URL=hogland_api_url):
+            token, param = sandbox_transport_token(
+                {"sandbox_backend": "hogland", "sandbox_connect_token": "m"}, sandbox_url
+            )
+        assert (token, param) == ("m", "_modal_connect_token")
+
     def test_hogland_runs_read_the_rotating_token_file_fresh_per_request(self, tmp_path):
         token_path = tmp_path / "token"
         token_path.write_text("rotated-1\n")
