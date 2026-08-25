@@ -481,8 +481,33 @@ class TestSandboxTransportToken:
         ids=["wrong_port", "wrong_scheme", "scheme_less"],
     )
     def test_hogland_bearer_is_withheld_on_origin_mismatch(self, sandbox_url):
-        token, param = sandbox_transport_token({"sandbox_backend": "hogland", "sandbox_connect_token": "m"}, sandbox_url)
+        token, param = sandbox_transport_token(
+            {"sandbox_backend": "hogland", "sandbox_connect_token": "m"}, sandbox_url
+        )
         assert (token, param) == ("m", "_modal_connect_token")
+
+    @override_settings(DEBUG=True)
+    @pytest.mark.parametrize(
+        "hogland_api_url,sandbox_url,expects_bearer",
+        [
+            # Local dev (SANDBOX_PROVIDER=hogland, DEBUG) reaches a loopback host over
+            # http and must keep the bearer.
+            ("http://localhost:8010", "http://localhost:8010/v1/hogboxes/hb-1/proxy/8080", True),
+            ("http://127.0.0.1:8010", "http://127.0.0.1:8010/v1/hogboxes/hb-1/proxy/8080", True),
+            # A non-loopback http origin must never receive the bearer, even in DEBUG.
+            ("http://evil.example.com", "http://evil.example.com/v1/hogboxes/hb-1/proxy/8080", False),
+        ],
+        ids=["loopback_localhost", "loopback_127", "remote_http"],
+    )
+    def test_loopback_http_keeps_the_bearer_only_in_debug(self, hogland_api_url, sandbox_url, expects_bearer):
+        with override_settings(HOGLAND_API_TOKEN="hog-tok", HOGLAND_API_URL=hogland_api_url):
+            token, param = sandbox_transport_token(
+                {"sandbox_backend": "hogland", "sandbox_connect_token": "m"}, sandbox_url
+            )
+        if expects_bearer:
+            assert (token, param) == ("hog-tok", "token")
+        else:
+            assert (token, param) == ("m", "_modal_connect_token")
 
     def test_hogland_runs_read_the_rotating_token_file_fresh_per_request(self, tmp_path):
         token_path = tmp_path / "token"

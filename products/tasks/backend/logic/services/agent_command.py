@@ -104,6 +104,18 @@ def _get_sandbox_url_and_token(task_run: Any) -> tuple[str | None, str | None]:
     return state.get("sandbox_url"), state.get("sandbox_connect_token")
 
 
+def _is_loopback_host(hostname: str | None) -> bool:
+    """Whether ``hostname`` is a loopback address (``localhost``/``127.0.0.1``/``::1``)."""
+    if not hostname:
+        return False
+    if hostname == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
 def _is_hogland_sandbox_url(sandbox_url: str | None) -> bool:
     """Whether ``sandbox_url`` points at the configured hogland control plane.
 
@@ -121,12 +133,16 @@ def _is_hogland_sandbox_url(sandbox_url: str | None) -> bool:
         expected = urlparse(hogland_api_url)
     except Exception:
         return False
-    # Require an https origin matching the configured host AND port. A scheme-less
-    # HOGLAND_API_URL parses to hostname=None; refusing that stops a None==None match
-    # from attaching the bearer to a scheme-less or mismatched-port sandbox_url.
-    if target.scheme != "https" or expected.scheme != "https":
-        return False
+    # A scheme-less HOGLAND_API_URL parses to hostname=None; refusing that stops a
+    # None==None match from attaching the bearer to a scheme-less or mismatched-port URL.
     if not target.hostname or not expected.hostname:
+        return False
+    # Require an https origin matching the configured host AND port. The one exception is
+    # local dev (SANDBOX_PROVIDER=hogland, DEBUG), which talks to a loopback host over
+    # http; allow http only when both hosts are loopback. Every real remote origin must
+    # still be https to receive the account-wide bearer.
+    loopback_dev = settings.DEBUG and _is_loopback_host(target.hostname) and _is_loopback_host(expected.hostname)
+    if not loopback_dev and (target.scheme != "https" or expected.scheme != "https"):
         return False
     return (target.hostname, target.port) == (expected.hostname, expected.port)
 
