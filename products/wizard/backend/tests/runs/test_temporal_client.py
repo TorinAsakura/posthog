@@ -58,12 +58,12 @@ def test_start_wizard_run_workflow_translates_rpc_failure(monkeypatch: pytest.Mo
         temporal_client.start_wizard_run_workflow(input)
 
 
-def test_start_wizard_run_workflow_does_not_translate_programming_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_wizard_run_workflow_translates_connection_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     input = WizardRunActivityInput(team_id=1, run_id=uuid4())
-    connect = AsyncMock(side_effect=RuntimeError("invalid client configuration"))
+    connect = AsyncMock(side_effect=RuntimeError("connection closed"))
     monkeypatch.setattr(temporal_client, "async_connect", connect)
 
-    with pytest.raises(RuntimeError, match="invalid client configuration"):
+    with pytest.raises(WizardTemporalError):
         temporal_client.start_wizard_run_workflow(input)
 
 

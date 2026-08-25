@@ -30,7 +30,7 @@ async def start_wizard_run_workflow(input: WizardRunActivityInput) -> None:
         )
     except WorkflowAlreadyStartedError:
         return
-    except RPCError as error:
+    except (RPCError, RuntimeError) as error:
         raise WizardTemporalError from error
 
 
@@ -42,4 +42,6 @@ async def cancel_wizard_run_workflow(run_id: UUID) -> None:
     except RPCError as error:
         if error.status == RPCStatusCode.NOT_FOUND:
             return
+        raise WizardTemporalError from error
+    except RuntimeError as error:
         raise WizardTemporalError from error
