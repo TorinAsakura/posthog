@@ -136,6 +136,7 @@ def open_sandbox_session(
                 "origin_product": run.task.origin_product,
                 "prewarmed": bool(state.get("prewarmed")),
                 "vm_runtime": config.is_vm,
+                "sandbox_backend": state.get("sandbox_backend"),
                 "cpu_cores": config.cpu_cores,
                 "memory_gb": config.memory_gb,
                 "ttl_seconds": config.ttl_seconds,
@@ -349,9 +350,11 @@ def get_task_sandbox_usage_by_team(begin: datetime, end: datetime) -> SandboxUsa
 
     Only the attributed slice of a session bills: ``[user_attributed_at,
     effective_end)``, clipped to the period so sessions spanning report boundaries
-    apportion across them. Every end is clamped to ``ttl_expires_at`` — the provider
+    apportion across them. A Modal end is clamped to ``ttl_expires_at`` — the provider
     kills the sandbox by then regardless, whether cleanup never ran (crashed
     workflows), stamped late, or the session is genuinely live (clamped to now).
+    Hogland's TTL is an idle timeout, not a kill deadline, so hogland rows keep their
+    real end time.
     Open rows whose TTL expired before the period are excluded in the query itself,
     so missed close stamps can't grow the scan without bound. Resource-second
     metrics use the configured limits; burstable request floors are recorded on the
@@ -372,7 +375,14 @@ def get_task_sandbox_usage_by_team(begin: datetime, end: datetime) -> SandboxUsa
     for session in sessions.iterator():
         assert session.user_attributed_at is not None
         start = max(session.user_attributed_at, begin)
-        effective_end = min(session.ended_at or now, session.ttl_expires_at)
+        end_time = session.ended_at or now
+        # Modal's TTL is a hard kill deadline, so its end clamps to ttl_expires_at. Hogland's
+        # TTL is an idle timeout that every proxied request extends, so a hogland box can
+        # outlive created_at + ttl_seconds; clamping there would undercount its billed window.
+        if session.sandbox_backend == "hogland":
+            effective_end = end_time
+        else:
+            effective_end = min(end_time, session.ttl_expires_at)
         stop = min(effective_end, end)
         if stop <= start:
             continue

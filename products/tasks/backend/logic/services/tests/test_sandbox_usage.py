@@ -554,6 +554,23 @@ class TestSandboxUsageAggregation(SandboxUsageBase):
 
         assert usage.seconds == [(self.team.id, 6 * 3600)]
 
+    @parameterized.expand([("hogland", 9 * 3600), (None, 6 * 3600)])
+    def test_ttl_clamp_skips_hogland_but_holds_for_modal(self, sandbox_backend, expected_seconds):
+        # Hogland's ttl_seconds is an idle timeout that every request extends, so a box can
+        # end well after created_at + ttl_seconds; its billed window must keep the true end.
+        # Modal's hard TTL is a kill deadline, so a Modal row still clamps to it.
+        self._session(
+            created_at=datetime(2026, 1, 2, 1, tzinfo=UTC),
+            user_attributed_at=datetime(2026, 1, 2, 1, tzinfo=UTC),
+            ended_at=datetime(2026, 1, 2, 10, tzinfo=UTC),
+            ttl_seconds=6 * 60 * 60,
+            sandbox_backend=sandbox_backend,
+        )
+
+        usage = get_task_sandbox_usage_by_team(self.BEGIN, self.END)
+
+        assert usage.seconds == [(self.team.id, expected_seconds)]
+
     def test_live_session_clamps_to_now(self):
         self._session(
             created_at=datetime(2026, 1, 2, 1, tzinfo=UTC),
