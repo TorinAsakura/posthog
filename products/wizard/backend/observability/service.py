@@ -1,6 +1,8 @@
 import logging
 from uuid import UUID
 
+from kombu.exceptions import OperationalError
+
 from products.wizard.backend.facade.contracts import WizardRunArtifactDTO, WizardRunDTO, WizardRunPullRequestArtifactDTO
 from products.wizard.backend.facade.enums import WizardRunStatus
 from products.wizard.backend.logic.workers.contracts import WizardWorkerTelemetry
@@ -20,12 +22,12 @@ class WizardObservability:
     def run_created(self, run: WizardRunDTO) -> None:
         try:
             metrics.report_run_created(run)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_run_created_metric_failed", extra=self._run_context(run))
 
         try:
             events.enqueue_run_created(run)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_run_created_event_failed", extra=self._run_context(run))
 
         logger.info("wizard_run_created", extra=self._run_context(run))
@@ -36,12 +38,12 @@ class WizardObservability:
     def dispatch_finished(self, run: WizardRunDTO, outcome: WizardRunDispatchOutcome) -> None:
         try:
             metrics.report_dispatch_finished(outcome)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_run_dispatch_metric_failed", extra=self._run_context(run))
 
         try:
             events.enqueue_dispatch_finished(run, outcome)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_run_dispatch_event_failed", extra=self._run_context(run))
 
         logger.info(
@@ -55,12 +57,12 @@ class WizardObservability:
 
         try:
             metrics.report_stage_entered(run.stage)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_run_stage_metric_failed", extra=self._run_context(run))
 
         try:
             events.enqueue_stage_entered(run, run.stage)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_run_stage_event_failed", extra=self._run_context(run))
 
         logger.info(
@@ -76,12 +78,12 @@ class WizardObservability:
 
         try:
             metrics.report_run_finished(current, previous.stage)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_run_finished_metric_failed", extra=self._run_context(current))
 
         try:
             events.enqueue_run_finished(current, previous.stage, event)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_run_finished_event_failed", extra=self._run_context(current))
 
         logger.info(
@@ -97,18 +99,18 @@ class WizardObservability:
     def worker_usage_recorded(self, run: WizardRunDTO, telemetry: WizardWorkerTelemetry) -> None:
         try:
             usage = worker_usage_observation(telemetry)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_worker_usage_mapping_failed", extra=self._run_context(run))
             return
 
         try:
             metrics.report_worker_usage(usage)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_worker_usage_metric_failed", extra=self._run_context(run))
 
         try:
             events.enqueue_worker_usage(run, usage)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_worker_usage_event_failed", extra=self._run_context(run))
 
         logger.info(
@@ -127,7 +129,7 @@ class WizardObservability:
     def git_diff_omitted(self, run: WizardRunDTO, size_bytes: int) -> None:
         try:
             metrics.report_git_diff_omitted(run)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_git_diff_omitted_metric_failed", extra=self._run_context(run))
 
         logger.warning(
@@ -138,7 +140,7 @@ class WizardObservability:
     def handoff_body_fallback(self, team_id: int, run_id: UUID) -> None:
         try:
             metrics.report_handoff_body_fallback()
-        except (RuntimeError, ValueError):
+        except ValueError:
             logger.exception(
                 "wizard_handoff_body_fallback_metric_failed",
                 extra={"team_id": team_id, "run_id": str(run_id)},
@@ -152,7 +154,7 @@ class WizardObservability:
     def artifact_created(self, run: WizardRunDTO, artifact: WizardRunArtifactDTO) -> None:
         try:
             metrics.report_artifact_created(artifact)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_artifact_metric_failed", extra=self._run_context(run))
 
         logger.info(
@@ -165,7 +167,7 @@ class WizardObservability:
 
         try:
             events.enqueue_pull_request_created(run)
-        except Exception:
+        except OperationalError:
             logger.exception("wizard_pull_request_created_event_failed", extra=self._run_context(run))
 
         logger.info(
@@ -185,7 +187,7 @@ class WizardObservability:
     ) -> None:
         try:
             metrics.report_worker_cleanup(outcome)
-        except Exception:
+        except ValueError:
             logger.exception(
                 "wizard_worker_cleanup_metric_failed",
                 extra={"team_id": team_id, "run_id": str(run_id), "outcome": outcome.value},
@@ -199,7 +201,7 @@ class WizardObservability:
     def run_past_deadline(self, run: WizardRunDTO) -> None:
         try:
             metrics.report_run_past_deadline(run)
-        except Exception:
+        except ValueError:
             logger.exception("wizard_run_deadline_metric_failed", extra=self._run_context(run))
 
         logger.warning("wizard_run_past_deadline", extra=self._run_context(run))

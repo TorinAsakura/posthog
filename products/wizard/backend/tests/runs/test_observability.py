@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from unittest.mock import patch
 
+from kombu.exceptions import OperationalError
 from prometheus_client import REGISTRY
 
 from products.wizard.backend.facade.contracts import (
@@ -140,8 +141,20 @@ def test_observability_failures_do_not_escape() -> None:
     observability = WizardObservability()
 
     with (
-        patch.object(service.metrics, "report_run_created", side_effect=RuntimeError("metric failed")),
-        patch.object(service.events, "enqueue_run_created", side_effect=RuntimeError("event failed")),
+        patch.object(service.metrics, "report_run_created", side_effect=ValueError("metric failed")),
+        patch.object(service.events, "enqueue_run_created", side_effect=OperationalError("event failed")),
+    ):
+        observability.run_created(run)
+
+
+def test_observability_does_not_hide_programming_errors() -> None:
+    run = replace(_cloud_run(), stage=None)
+    observability = WizardObservability()
+
+    with (
+        patch.object(service.metrics, "report_run_created", side_effect=TypeError("bug")),
+        patch.object(service.events, "enqueue_run_created"),
+        pytest.raises(TypeError, match="bug"),
     ):
         observability.run_created(run)
 
