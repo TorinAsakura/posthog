@@ -1,6 +1,8 @@
 from posthog.test.base import APIBaseTest
+from unittest.mock import patch
 
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 
 from posthog.models.integration import Integration
 
@@ -11,6 +13,9 @@ from products.warehouse_sources.backend.models.external_data_destination import 
 )
 from products.warehouse_sources.backend.models.external_data_schema import ExternalDataSchema
 from products.warehouse_sources.backend.models.external_data_source import ExternalDataSource
+from products.warehouse_sources.backend.presentation.views.external_data_destination import (
+    ExternalDataDestinationViewSet,
+)
 from products.warehouse_sources.backend.types import ExternalDataSourceType
 
 
@@ -105,6 +110,33 @@ class TestExternalDataDestinationAPI(DestinationAPITestBase):
         listing = self.client.get(f"/api/projects/{other_team.pk}/external_data_destinations").json()
 
         assert listing["results"] == []
+
+    def test_delete_requires_editor_on_every_wired_table(self) -> None:
+        destination = self._create_destination()
+        ExternalDataSourceDestination.objects.for_team(self.team.pk).create(
+            team_id=self.team.pk, source=self.source, destination=destination
+        )
+
+        with patch.object(ExternalDataDestinationViewSet, "_assert_can_mutate", side_effect=PermissionDenied("nope")):
+            response = self.client.delete(f"{self.base}/{destination.id}")
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        destination.refresh_from_db()
+        assert destination.deleted is False
+        assert ExternalDataSourceDestination.objects.for_team(self.team.pk).count() == 1
+
+    def test_update_requires_editor_on_every_wired_table(self) -> None:
+        destination = self._create_destination()
+        ExternalDataSchemaDestination.objects.for_team(self.team.pk).create(
+            team_id=self.team.pk, schema=self.schema, destination=destination
+        )
+
+        with patch.object(ExternalDataDestinationViewSet, "_assert_can_mutate", side_effect=PermissionDenied("nope")):
+            response = self.client.patch(f"{self.base}/{destination.id}", {"name": "renamed"})
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        destination.refresh_from_db()
+        assert destination.name == "analytics postgres"
 
 
 class TestDestinationLinkEndpoints(DestinationAPITestBase):

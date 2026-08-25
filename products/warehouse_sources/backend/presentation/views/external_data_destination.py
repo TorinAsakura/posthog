@@ -1,15 +1,19 @@
 from typing import Any
 
+from django.db.models import Q
+
 from rest_framework import serializers, status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.scoped_related_fields import TeamScopedPrimaryKeyRelatedField
 from posthog.models.integration import Integration
+from posthog.permissions import is_service_auth
 
-from products.warehouse_sources.backend.facade.models import ExternalDataDestination
+from products.access_control.backend.facade.user_access_control import access_level_satisfied_for_resource
+from products.warehouse_sources.backend.facade.models import ExternalDataDestination, ExternalDataSchema
 
 # Which Integration kind holds the credentials for each destination type. A type absent from
 # this map needs no integration; the PostHog warehouse is the only such type today.
@@ -125,6 +129,39 @@ class ExternalDataDestinationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewS
     def safely_get_queryset(self, queryset: Any) -> Any:
         return queryset.filter(team_id=self.team_id).order_by(self.ordering)
 
+    def _assert_can_mutate(self, instance: ExternalDataDestination) -> None:
+        """Per-table gate for changing or deleting a shared destination.
+
+        `requires_resource_level_access` only proves editor access to *some* source; a
+        destination is wired to every table on each source it's linked to (directly, or
+        through a schema-level override), and a table can be locked below that resource-level
+        grant. Changing the destination's integration/config, or deleting it outright, reroutes
+        every one of those tables' next sync, so this mirrors
+        `ExternalDataSourceViewSet._assert_can_write_schemas` — the same gate a source-level
+        destination change goes through — rather than trusting the coarser resource check alone.
+        """
+        if is_service_auth(self.request):
+            return
+
+        source_ids = {link.source_id for link in instance.source_links.filter(enabled=True)}
+        direct_schema_ids = {link.schema_id for link in instance.schema_links.filter(enabled=True)}
+        schemas = list(
+            ExternalDataSchema.objects.exclude(deleted=True)
+            .filter(team_id=self.team_id)
+            .filter(Q(source_id__in=source_ids) | Q(id__in=direct_schema_ids))
+            .select_related("table")
+        )
+
+        uac = self.user_access_control
+        for schema in schemas:
+            level = uac.get_user_access_level(schema.table or schema.source)
+            if level is None or not access_level_satisfied_for_resource("warehouse_table", level, "editor"):
+                raise PermissionDenied("You do not have editor access to every table wired to this destination.")
+
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:
+        self._assert_can_mutate(serializer.instance)
+        super().perform_update(serializer)
+
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Soft-delete, and detach it from everything that syncs to it.
 
@@ -135,6 +172,7 @@ class ExternalDataDestinationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewS
         instance = self.get_object()
         if instance.is_posthog_warehouse:
             raise ValidationError({"type": "The PostHog warehouse destination cannot be deleted."})
+        self._assert_can_mutate(instance)
 
         instance.source_links.all().delete()
         instance.schema_links.all().delete()
