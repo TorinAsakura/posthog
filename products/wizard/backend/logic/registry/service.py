@@ -1,4 +1,5 @@
 import posthoganalytics
+from posthoganalytics.request import APIError, RequestsConnectionError, RequestsTimeout
 
 from products.wizard.backend.facade.contracts import WizardProgram
 from products.wizard.backend.facade.errors import WizardProgramNotAvailableError
@@ -7,14 +8,17 @@ from products.wizard.backend.logic.registry.parser import parse_registry_payload
 
 
 def get_registry(*, distinct_id: str, organization_id: str) -> tuple[WizardProgram, ...]:
-    payload = posthoganalytics.get_feature_flag_payload(
-        REGISTRY_FEATURE_FLAG,
-        distinct_id=distinct_id,
-        groups={"organization": organization_id},
-        group_properties={"organization": {"id": organization_id}},
-        only_evaluate_locally=False,
-        send_feature_flag_events=False,
-    )
+    try:
+        payload = posthoganalytics.get_feature_flag_payload(
+            REGISTRY_FEATURE_FLAG,
+            distinct_id=distinct_id,
+            groups={"organization": organization_id},
+            group_properties={"organization": {"id": organization_id}},
+            only_evaluate_locally=False,
+            send_feature_flag_events=False,
+        )
+    except (APIError, RequestsConnectionError, RequestsTimeout):
+        return FALLBACK_REGISTRY.programs
 
     try:
         registry = parse_registry_payload(payload)

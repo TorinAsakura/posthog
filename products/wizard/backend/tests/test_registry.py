@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import patch
 
 from parameterized import parameterized
+from posthoganalytics.request import APIError
 
 from products.wizard.backend.facade import api as wizard_facade
 from products.wizard.backend.facade.contracts import WizardProgram
@@ -175,3 +176,10 @@ def test_registry_does_not_hide_programming_errors() -> None:
         pytest.raises(RuntimeError, match="bug"),
     ):
         wizard_facade.get_registry(distinct_id="user-distinct-id", organization_id="organization-id")
+
+
+def test_registry_falls_back_when_feature_flag_fetch_fails() -> None:
+    with patch("posthoganalytics.get_feature_flag_payload", side_effect=APIError(503, "Unavailable")):
+        programs = wizard_facade.get_registry(distinct_id="user-distinct-id", organization_id="organization-id")
+
+    assert programs == (POSTHOG_INTEGRATION_PROGRAM,)
