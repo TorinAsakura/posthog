@@ -17,6 +17,7 @@ from products.wizard.backend.logic.programs import program_to_mapping
 from products.wizard.backend.logic.registry.config import POSTHOG_INTEGRATION_PROGRAM
 from products.wizard.backend.logic.runs import lifecycle, reconciliation
 from products.wizard.backend.models import WizardRun, WizardWorker
+from products.wizard.backend.temporal.errors import WizardTemporalError
 
 
 def _create_cloud_run(team_id: int, user_id: int, **values: object) -> WizardRun:
@@ -60,7 +61,7 @@ def test_cloud_cancellation_survives_temporal_failure(team, user) -> None:
 
     with patch(
         "products.wizard.backend.logic.runs.cancellation.temporal_client.cancel_wizard_run_workflow",
-        side_effect=RuntimeError,
+        side_effect=WizardTemporalError,
     ):
         cancelled = lifecycle.cancel_run(team.id, run.id)
 

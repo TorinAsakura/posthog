@@ -2,13 +2,11 @@ from uuid import UUID
 
 from products.wizard.backend.facade.enums import WizardRunEnvironment, WizardRunStatus
 from products.wizard.backend.logic.runs import store
+from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.temporal import client as temporal_client
 from products.wizard.backend.temporal.constants import wizard_run_workflow_id
 from products.wizard.backend.temporal.contracts import WizardRunActivityInput
-
-
-class WizardRunDispatchError(Exception):
-    pass
+from products.wizard.backend.temporal.errors import WizardTemporalError
 
 
 def dispatch_wizard_run_to_temporal_worker(team_id: int, run_id: UUID) -> None:
@@ -20,7 +18,7 @@ def dispatch_wizard_run_to_temporal_worker(team_id: int, run_id: UUID) -> None:
 
     try:
         temporal_client.start_wizard_run_workflow(WizardRunActivityInput(team_id=team_id, run_id=run_id))
-    except Exception as error:
+    except WizardTemporalError as error:
         store.mark_dispatch_failed(team_id, run_id)
         raise WizardRunDispatchError from error
 

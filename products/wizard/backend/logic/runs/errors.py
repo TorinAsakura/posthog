@@ -1,0 +1,2 @@
+class WizardRunDispatchError(Exception):
+    pass

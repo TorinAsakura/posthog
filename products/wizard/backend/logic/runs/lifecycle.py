@@ -36,6 +36,7 @@ from products.wizard.backend.logic.runs import (
 )
 from products.wizard.backend.logic.runs.admission import enforce_cloud_run_creation_policy
 from products.wizard.backend.logic.runs.dispatch import dispatch_wizard_run_to_temporal_worker
+from products.wizard.backend.logic.runs.errors import WizardRunDispatchError
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
 from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
 from products.wizard.backend.logic.runs.transitions import transition
@@ -123,7 +124,6 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
                     params.team_id,
                     result.run.id,
                 ),
-                robust=True,
             )
 
     if is_cloud_run:
@@ -139,7 +139,7 @@ def _dispatch_cloud_run(team_id: int, run_id: UUID) -> None:
     try:
         dispatch_wizard_run_to_temporal_worker(team_id, run_id)
 
-    except Exception:
+    except WizardRunDispatchError:
         logger.exception(
             "wizard_run_dispatch_failed",
             extra={"team_id": team_id, "run_id": str(run_id)},

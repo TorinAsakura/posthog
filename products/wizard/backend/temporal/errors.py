@@ -7,6 +7,10 @@ from products.wizard.backend.temporal.activities.errors import (
 )
 
 
+class WizardTemporalError(Exception):
+    pass
+
+
 def wizard_run_error_code(error: ActivityError) -> WizardRunErrorCode:
     cause = error.cause
     if isinstance(cause, TimeoutError):

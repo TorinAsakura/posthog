@@ -20,6 +20,7 @@ from products.wizard.backend.facade.errors import (
     WizardProgramEnvironmentNotSupportedError,
 )
 from products.wizard.backend.models import WizardRun
+from products.wizard.backend.temporal.errors import WizardTemporalError
 
 PROGRAM_DEFINITION = {
     "id": "web-analytics-audit",
@@ -203,7 +204,7 @@ def test_cloud_run_survives_temporal_dispatch_failure(team, user) -> None:
         ),
         patch(
             "products.wizard.backend.logic.runs.dispatch.temporal_client.start_wizard_run_workflow",
-            side_effect=RuntimeError("Temporal unavailable"),
+            side_effect=WizardTemporalError,
         ),
     ):
         run = wizard_facade.create_run(
