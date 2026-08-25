@@ -1229,6 +1229,15 @@ class ModalSandbox(SandboxBase):
         logger.info(f"Got connect credentials for sandbox {self.id}: {credentials.url}")
         return AgentServerResult(url=credentials.url, token=credentials.token)
 
+    def create_preview_connect_credentials(self, port: int, user_metadata: dict[str, Any]) -> AgentServerResult:
+        if not self.is_running():
+            raise RuntimeError("Sandbox not in running state.")
+
+        credentials = self._sandbox.create_connect_token(user_metadata=user_metadata, port=port)
+
+        logger.info(f"Minted preview connect credentials for sandbox {self.id} on port {port}")
+        return AgentServerResult(url=credentials.url, token=credentials.token)
+
     def _build_agent_server_command(
         self,
         repo_path: str | None,

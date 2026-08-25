@@ -19,10 +19,10 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from types import TracebackType
-from typing import TYPE_CHECKING, Protocol, Self
+from typing import TYPE_CHECKING, Any, Protocol, Self
 
 from django.conf import settings
 
@@ -52,7 +52,7 @@ class AgentServerResult:
     """Result from starting an agent server in a sandbox."""
 
     url: str
-    token: str | None = None
+    token: str | None = field(default=None, repr=False)
 
 
 class SandboxStatus(str, Enum):
@@ -491,6 +491,9 @@ class SandboxBase(ABC):
         token needed to connect to the sandbox.
         """
         ...
+
+    @abstractmethod
+    def create_preview_connect_credentials(self, port: int, user_metadata: dict[str, Any]) -> AgentServerResult: ...
 
     @abstractmethod
     def start_agent_server(

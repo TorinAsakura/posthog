@@ -21,7 +21,7 @@ import hashlib
 import logging
 from collections.abc import Collection, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -54,6 +54,7 @@ from django.utils.http import content_disposition_header
 
 import posthoganalytics
 
+from posthog.dataclasses import frozen
 from posthog.event_usage import groups
 from posthog.models import Team, User
 from posthog.models.integration import Integration
@@ -70,6 +71,7 @@ from products.tasks.backend.constants import (
     ANALYSIS_TARGET_RUN_ID_STATE_KEY,
     ANALYSIS_TARGET_TASK_ID_STATE_KEY,
     CI_STATUSES as CI_STATUSES,  # re-exported for presentation
+    DEV_STACK_PREVIEW_STATE_KEY,
     MAX_CUSTOM_IMAGES_PER_TEAM,
     MAX_CUSTOM_IMAGES_PER_USER,
     PI_CLOUD_RUNTIME_FEATURE_FLAG,
@@ -233,6 +235,8 @@ __all__ = [
     "sync_task_run_session",
     "get_task_run_detail",
     "get_task_run_sandbox_connection",
+    "resolve_task_run_preview_redirect",
+    "task_run_preview_port",
     "get_task_run_living_artifact",
     "capture_relay_command_telemetry",
     "get_task_run_stream_info",
@@ -493,6 +497,7 @@ def _task_run_detail_to_dto(run: TaskRun, *, include_agent_state: bool = False) 
         created_at=run.created_at,
         updated_at=run.updated_at,
         completed_at=run.completed_at,
+        preview_available=task_run_preview_port(run.state) is not None,
     )
 
 
@@ -4149,6 +4154,80 @@ def get_task_run_sandbox_connection(
         sandbox_url=run_state.sandbox_url,
         sandbox_connect_token=run_state.sandbox_connect_token,
         connection_token=connection_token,
+    )
+
+
+TaskRunPreviewOutcome = Literal["ready", "not_ready", "ended", "unavailable"]
+
+
+@frozen
+class TaskRunPreviewRedirect:
+    outcome: TaskRunPreviewOutcome
+    redirect_url: str | None = field(default=None, repr=False)
+
+
+_PREVIEW_NOT_READY = TaskRunPreviewRedirect(outcome="not_ready")
+_PREVIEW_ENDED = TaskRunPreviewRedirect(outcome="ended")
+_PREVIEW_UNAVAILABLE = TaskRunPreviewRedirect(outcome="unavailable")
+
+
+def task_run_preview_port(state: dict | None) -> int | None:
+    preview = (state or {}).get(DEV_STACK_PREVIEW_STATE_KEY)
+    if not isinstance(preview, dict):
+        return None
+    port = preview.get("port")
+    return port if isinstance(port, int) and not isinstance(port, bool) else None
+
+
+def resolve_task_run_preview_redirect(
+    run_id: str | UUID, task_id: str | UUID, team_id: int, *, user_id: int
+) -> TaskRunPreviewRedirect | None:
+    from products.tasks.backend.exceptions import (
+        SandboxNotFoundError,  # noqa: PLC0415 — keep temporalio off the api import path
+    )
+    from products.tasks.backend.logic.services.sandbox import (  # noqa: PLC0415 — keeps the sandbox providers off the api import path
+        get_sandbox_class,
+    )
+
+    run = _get_visible_run(run_id, task_id, team_id)
+    if run is None:
+        return None
+
+    state = run.state if isinstance(run.state, dict) else {}
+    port = task_run_preview_port(state)
+    sandbox_id = state.get("sandbox_id")
+    if port is None or not sandbox_id:
+        return _PREVIEW_NOT_READY
+
+    # A gone sandbox ends the preview for good; anything else is a bad moment worth retrying,
+    # and the two get different pages so nobody abandons a preview that is still there.
+    try:
+        sandbox = get_sandbox_class().get_by_id(str(sandbox_id))
+        running = sandbox.is_running()
+    except SandboxNotFoundError:
+        return _PREVIEW_ENDED
+    except Exception:
+        logger.exception("task_run_preview_sandbox_lookup_failed", extra={"run_id": str(run.id)})
+        return _PREVIEW_UNAVAILABLE
+
+    if not running:
+        return _PREVIEW_ENDED
+
+    try:
+        credentials = sandbox.create_preview_connect_credentials(
+            port=port, user_metadata={"user_id": user_id, "team_id": team_id}
+        )
+    except SandboxNotFoundError:
+        return _PREVIEW_ENDED
+    except Exception:
+        logger.exception("task_run_preview_token_mint_failed", extra={"run_id": str(run.id)})
+        return _PREVIEW_UNAVAILABLE
+
+    if not credentials.token:
+        return _PREVIEW_UNAVAILABLE
+    return TaskRunPreviewRedirect(
+        outcome="ready",
+        redirect_url=f"{credentials.url.rstrip('/')}/?_modal_connect_token={credentials.token}",
     )
 
 

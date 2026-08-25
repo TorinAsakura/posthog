@@ -15,6 +15,14 @@ from .materialize_context_layer import (
     MaterializeContextLayerOutput,
     materialize_context_layer_in_sandbox,
 )
+from .post_preview_pr_comment import (
+    EndPreviewPrCommentInput,
+    EndPreviewPrCommentOutput,
+    PostPreviewPrCommentInput,
+    PostPreviewPrCommentOutput,
+    end_preview_pr_comment,
+    post_preview_pr_comment,
+)
 from .post_slack_update import PostSlackUpdateInput, post_slack_update
 from .provision_sandbox import (
     CheckoutBranchInSandboxInput,
@@ -71,6 +79,14 @@ from .start_agent_server import (
     mark_repo_ready,
     start_agent_server,
 )
+from .start_dev_stack_preview import (
+    StartDevStackPreviewInput,
+    StartDevStackPreviewOutput,
+    WaitDevStackPreviewInput,
+    WaitDevStackPreviewOutput,
+    start_dev_stack_preview,
+    wait_dev_stack_preview,
+)
 from .track_workflow_event import TrackWorkflowEventInput, track_workflow_event
 from .update_task_run_status import UpdateTaskRunStatusInput, update_task_run_status
 
@@ -92,7 +108,15 @@ __all__ = [
     "CreateSandboxForRepositoryOutput",
     "InjectFreshTokensOnResumeInput",
     "InvalidateResumeSnapshotInput",
+    "EndPreviewPrCommentInput",
+    "EndPreviewPrCommentOutput",
+    "PostPreviewPrCommentInput",
+    "PostPreviewPrCommentOutput",
     "PostSlackUpdateInput",
+    "StartDevStackPreviewInput",
+    "StartDevStackPreviewOutput",
+    "WaitDevStackPreviewInput",
+    "WaitDevStackPreviewOutput",
     "PrepareSandboxForRepositoryInput",
     "PrepareSandboxForRepositoryOutput",
     "ReadSandboxLogsInput",
@@ -136,7 +160,11 @@ __all__ = [
     "inject_fresh_tokens_on_resume",
     "restore_sandbox_connection_state",
     "invalidate_resume_snapshot",
+    "end_preview_pr_comment",
+    "post_preview_pr_comment",
     "post_slack_update",
+    "start_dev_stack_preview",
+    "wait_dev_stack_preview",
     "prepare_sandbox_for_repository",
     "read_sandbox_logs",
     "refresh_sandbox_credentials",

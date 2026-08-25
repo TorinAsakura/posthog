@@ -155,6 +155,22 @@ DEV_STACK_IMAGE_BAKE_TOTAL = Counter(
     labelnames=["outcome", "region", "trigger"],
 )
 
+# The wait activity gives up at 720s, so the top bucket is the timeout itself.
+DEV_STACK_PREVIEW_BOOT_BUCKETS = [30.0, 60.0, 120.0, 180.0, 240.0, 300.0, 420.0, 600.0, 720.0]
+
+DEV_STACK_PREVIEW_BOOT_SECONDS = Histogram(
+    "posthog_tasks_dev_stack_preview_boot_seconds",
+    "Wall time from launching the dev stack in a run's sandbox to its preview answering health checks",
+    buckets=DEV_STACK_PREVIEW_BOOT_BUCKETS,
+)
+
+DEV_STACK_PREVIEW_TOTAL = Counter(
+    "posthog_tasks_dev_stack_preview_total",
+    "Dev stack preview lifecycle outcomes. started counts launches; ready, failed and timed_out "
+    "count how each launch resolved, so started minus the rest is the previews still booting.",
+    labelnames=["outcome"],
+)
+
 
 # Connection lifetimes range from a few seconds (cold reconnect) to the
 # per-connection cap. The 120s bucket isolates connections cut at the
