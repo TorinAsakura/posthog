@@ -6,6 +6,8 @@ from unittest.mock import patch
 from django.http.response import HttpResponseBase
 from django.test import Client, TestCase, override_settings
 
+from products.workflows.backend.tasks.ses_tenant_state import SYNC_INITIAL_DELAY_SECONDS
+
 TOPIC = "arn:aws:sns:us-east-1:123456789012:ses-tenant-events"
 WEBHOOK_PATH = "/webhooks/workflows/ses-events"
 
@@ -53,7 +55,7 @@ class TestSesTenantEventsWebhook(TestCase):
         response = self._post(_sns_notification(_eventbridge_event()))
 
         assert response.status_code == 202
-        self.sync_mock.delay.assert_called_once_with(42)
+        self.sync_mock.apply_async.assert_called_once_with((42,), countdown=SYNC_INITIAL_DELAY_SECONDS)
 
     def test_finds_the_tenant_in_resource_arns_when_detail_has_no_name(self) -> None:
         event = _eventbridge_event(detail={}, resources=["arn:aws:ses:us-east-1:123456789012:tenant/team-7/deadbeef"])
@@ -61,19 +63,19 @@ class TestSesTenantEventsWebhook(TestCase):
         response = self._post(_sns_notification(event))
 
         assert response.status_code == 202
-        self.sync_mock.delay.assert_called_once_with(7)
+        self.sync_mock.apply_async.assert_called_once_with((7,), countdown=SYNC_INITIAL_DELAY_SECONDS)
 
     def test_acks_but_ignores_events_from_other_sources(self) -> None:
         response = self._post(_sns_notification(_eventbridge_event(source="aws.health")))
 
         assert response.status_code == 200
-        assert not self.sync_mock.delay.called
+        assert not self.sync_mock.apply_async.called
 
     def test_rejects_messages_from_unknown_topics(self) -> None:
         response = self._post(_sns_notification(_eventbridge_event(), topic="arn:aws:sns:us-east-1:999:other"))
 
         assert response.status_code == 403
-        assert not self.sync_mock.delay.called
+        assert not self.sync_mock.apply_async.called
 
     def test_rejects_messages_with_invalid_signatures(self) -> None:
         self.verify_mock.return_value = False
@@ -81,14 +83,14 @@ class TestSesTenantEventsWebhook(TestCase):
         response = self._post(_sns_notification(_eventbridge_event()))
 
         assert response.status_code == 403
-        assert not self.sync_mock.delay.called
+        assert not self.sync_mock.apply_async.called
 
     @override_settings(WORKFLOWS_SES_EVENTS_SNS_TOPIC_ARNS=[])
     def test_is_inert_when_no_topic_is_allowlisted(self) -> None:
         response = self._post(_sns_notification(_eventbridge_event()))
 
         assert response.status_code == 404
-        assert not self.sync_mock.delay.called
+        assert not self.sync_mock.apply_async.called
 
     def test_confirms_subscriptions_by_fetching_the_subscribe_url(self) -> None:
         subscribe_url = "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription&Token=tok"

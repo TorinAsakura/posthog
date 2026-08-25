@@ -10,6 +10,14 @@ from products.workflows.backend.services.ses_tenant_state import sync_ses_tenant
 
 logger = get_logger(__name__)
 
+# SES does not reflect a tenant change in its read APIs the moment the event fires, and the sync
+# deliberately trusts the API over the payload. A read that lands too early sees the old state and
+# reports no change, which is indistinguishable from a no-op, so a change can be missed entirely
+# until the daily sweep. Re-read a couple of times before giving up.
+SYNC_INITIAL_DELAY_SECONDS = 15
+SYNC_ATTEMPTS = 3
+SYNC_RETRY_DELAY_SECONDS = 45
+
 
 @shared_task(
     ignore_result=True,
@@ -22,9 +30,15 @@ logger = get_logger(__name__)
     max_retries=5,
     retry_jitter=True,
 )
-def sync_ses_tenant_state_task(team_id: int) -> None:
-    """Webhook-triggered: an EventBridge event said this team's tenant changed — fetch and apply."""
-    sync_ses_tenant_state(team_id)
+def sync_ses_tenant_state_task(team_id: int, attempt: int = 1) -> None:
+    """Webhook-triggered: an EventBridge event said this team's tenant changed, fetch and apply."""
+    if sync_ses_tenant_state(team_id):
+        return
+    if attempt >= SYNC_ATTEMPTS:
+        logger.info("SES tenant state still unchanged, giving up", team_id=team_id, attempts=attempt)
+        return
+    logger.info("SES tenant state unchanged, re-reading", team_id=team_id, attempt=attempt)
+    sync_ses_tenant_state_task.apply_async((team_id, attempt + 1), countdown=SYNC_RETRY_DELAY_SECONDS)
 
 
 @shared_task(ignore_result=True, queue=CeleryQueue.LONG_RUNNING.value)

@@ -45,7 +45,7 @@ _FINDING_DESCRIPTIONS = {
 _STATE_FIELDS = ["ses_tenant_sending_status", "ses_tenant_reputation_impact", "ses_tenant_state_synced_at"]
 
 
-def sync_ses_tenant_state(team_id: int, provider: SESProvider | None = None, *, verify_team: bool = True) -> None:
+def sync_ses_tenant_state(team_id: int, provider: SESProvider | None = None, *, verify_team: bool = True) -> bool:
     """
     Fetch the authoritative AWS SES tenant state for a team and apply it. Called from the
     EventBridge webhook (events only say "something changed" — the API is the source of truth)
@@ -57,12 +57,13 @@ def sync_ses_tenant_state(team_id: int, provider: SESProvider | None = None, *, 
     # verify_team=False: it reads team ids off integration rows, so the team exists by construction.
     if verify_team and not Team.objects.filter(id=team_id).exists():
         logger.warning("Skipping SES tenant state sync for unknown team", team_id=team_id)
-        return
+        return False
 
     tenant = (provider or SESProvider()).get_tenant_reputation(team_id)
     if tenant is None:
-        return
-    apply_ses_tenant_state(
+        logger.info("No SES tenant for team", team_id=team_id)
+        return False
+    return apply_ses_tenant_state(
         team_id,
         sending_status=tenant["sending_status"],
         reputation_impact=tenant["reputation_impact"],
@@ -76,7 +77,7 @@ def apply_ses_tenant_state(
     sending_status: str,
     reputation_impact: str | None,
     findings: list[dict[str, Any]] | None = None,
-) -> None:
+) -> bool:
     """
     Persist the tenant state and email the project's admins on meaningful transitions:
     sending paused, sending re-enabled, or reputation findings escalating. The stored state is
@@ -95,7 +96,10 @@ def apply_ses_tenant_state(
         if previous_status == sending_status and previous_impact == impact:
             config.ses_tenant_state_synced_at = timezone.now()
             config.save(update_fields=["ses_tenant_state_synced_at"])
-            return
+            # Logged because it is indistinguishable from a lost event otherwise: an SES read that
+            # lands before AWS has propagated a change looks exactly like nothing having happened.
+            logger.info("SES tenant state unchanged", team_id=team_id, status=sending_status, impact=impact)
+            return False
 
         now = timezone.now()
         config.ses_tenant_sending_status = sending_status
@@ -121,10 +125,19 @@ def apply_ses_tenant_state(
             findings=_findings_for_email(findings),
             staff_suspended=config.email_sending_suspended_at is not None,
         )
+        logger.info(
+            "SES tenant transition handled",
+            team_id=team_id,
+            to_status=sending_status,
+            to_impact=impact,
+            notifying=notify is not None,
+            staff_suspended=config.email_sending_suspended_at is not None,
+        )
         if notify is not None:
             # Dispatch after commit so a rollback can't leave an email claiming a state
             # that was never persisted.
             transaction.on_commit(notify)
+        return True
 
 
 def _findings_for_email(findings: list[dict[str, Any]] | None) -> list[dict[str, str]]:

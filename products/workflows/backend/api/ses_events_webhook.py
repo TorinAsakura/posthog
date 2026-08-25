@@ -21,7 +21,7 @@ import requests
 import structlog
 
 from products.workflows.backend.services.sns_verification import is_valid_sns_url, verify_sns_message
-from products.workflows.backend.tasks.ses_tenant_state import sync_ses_tenant_state_task
+from products.workflows.backend.tasks.ses_tenant_state import SYNC_INITIAL_DELAY_SECONDS, sync_ses_tenant_state_task
 
 logger = structlog.get_logger(__name__)
 
@@ -104,6 +104,9 @@ def ses_tenant_events_webhook(request: HttpRequest) -> HttpResponse:
         logger.warning("ses_tenant_events_webhook_no_tenant", detail_type=event.get("detail-type"))
         return HttpResponse(status=200)
 
-    # Ack fast; the sync fetches authoritative state and sends any transition emails.
-    sync_ses_tenant_state_task.delay(team_id)
+    # Ack fast; the sync fetches authoritative state and sends any transition emails. Delayed
+    # because SES serves the pre-change state for a short window after the event fires, and a sync
+    # that reads too early records "no change" and drops the transition.
+    logger.info("ses_tenant_events_webhook_accepted", team_id=team_id, detail_type=event.get("detail-type"))
+    sync_ses_tenant_state_task.apply_async((team_id,), countdown=SYNC_INITIAL_DELAY_SECONDS)
     return HttpResponse(status=202)

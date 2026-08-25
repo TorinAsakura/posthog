@@ -12,6 +12,11 @@ from products.workflows.backend.services.ses_tenant_state import (
     apply_ses_tenant_state,
     sync_ses_tenant_state,
 )
+from products.workflows.backend.tasks.ses_tenant_state import (
+    SYNC_ATTEMPTS,
+    SYNC_RETRY_DELAY_SECONDS,
+    sync_ses_tenant_state_task,
+)
 
 
 class TestApplySesTenantState(BaseTest):
@@ -183,3 +188,48 @@ class TestSyncSesTenantState(BaseTest):
 
         provider.get_tenant_reputation.assert_not_called()
         assert not TeamWorkflowsConfig.objects.filter(team_id=self.team.id + 99_999).exists()
+
+
+class TestSyncTaskReReads(BaseTest):
+    """
+    SES serves the pre-change state briefly after an event fires, so a sync that reads immediately
+    records no change and the transition is lost until the next daily sweep. A dev tenant pause was
+    missed exactly this way.
+    """
+
+    def _run(self, changed: list[bool]) -> MagicMock:
+        with (
+            patch(
+                "products.workflows.backend.tasks.ses_tenant_state.sync_ses_tenant_state",
+                side_effect=changed,
+            ),
+            patch(
+                "products.workflows.backend.tasks.ses_tenant_state.sync_ses_tenant_state_task.apply_async"
+            ) as apply_async,
+        ):
+            sync_ses_tenant_state_task(self.team.id)
+        return apply_async
+
+    def test_re_reads_when_the_first_read_saw_no_change(self) -> None:
+        apply_async = self._run([False])
+
+        apply_async.assert_called_once_with((self.team.id, 2), countdown=SYNC_RETRY_DELAY_SECONDS)
+
+    def test_stops_re_reading_once_a_change_lands(self) -> None:
+        apply_async = self._run([True])
+
+        assert not apply_async.called
+
+    def test_gives_up_after_the_attempt_limit(self) -> None:
+        with (
+            patch(
+                "products.workflows.backend.tasks.ses_tenant_state.sync_ses_tenant_state",
+                return_value=False,
+            ),
+            patch(
+                "products.workflows.backend.tasks.ses_tenant_state.sync_ses_tenant_state_task.apply_async"
+            ) as apply_async,
+        ):
+            sync_ses_tenant_state_task(self.team.id, attempt=SYNC_ATTEMPTS)
+
+        assert not apply_async.called
