@@ -2,6 +2,8 @@ import logging
 
 from django.utils import timezone
 
+from posthog.dataclasses import frozen
+
 from products.wizard.backend.facade.enums import (
     WizardRunDispatchStatus,
     WizardRunErrorCode,
@@ -18,8 +20,25 @@ from products.wizard.backend.models import WizardRun, WizardWorker
 logger = logging.getLogger(__name__)
 
 
-def reconcile_pending_dispatches() -> int:
-    pending = (
+@frozen
+class ReconciliationSummary:
+    scanned: int
+    reconciled: int
+    failed: int
+    batch_limit_reached: bool
+
+
+def _summary(scanned: int, reconciled: int) -> ReconciliationSummary:
+    return ReconciliationSummary(
+        scanned=scanned,
+        reconciled=reconciled,
+        failed=scanned - reconciled,
+        batch_limit_reached=scanned == RECONCILIATION_BATCH_SIZE,
+    )
+
+
+def reconcile_pending_dispatches() -> ReconciliationSummary:
+    pending = list(
         WizardRun.objects.unscoped()
         .filter(
             status=WizardRunStatus.CREATED.value,
@@ -27,6 +46,7 @@ def reconcile_pending_dispatches() -> int:
         )
         .values_list("team_id", "id")[:RECONCILIATION_BATCH_SIZE]
     )
+
     reconciled = 0
     for team_id, run_id in pending:
         try:
@@ -35,11 +55,12 @@ def reconcile_pending_dispatches() -> int:
             logger.exception("wizard_run_redispatch_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue
         reconciled += 1
-    return reconciled
+
+    return _summary(len(pending), reconciled)
 
 
-def reconcile_pending_cancellations() -> int:
-    pending = (
+def reconcile_pending_cancellations() -> ReconciliationSummary:
+    pending = list(
         WizardRun.objects.unscoped()
         .filter(
             status__in=(WizardRunStatus.CANCELLED.value, WizardRunStatus.FAILED.value),
@@ -48,11 +69,14 @@ def reconcile_pending_cancellations() -> int:
         )
         .values_list("team_id", "id")[:RECONCILIATION_BATCH_SIZE]
     )
-    return sum(cancellation.deliver_cancellation(team_id, run_id) for team_id, run_id in pending)
+
+    reconciled = sum(cancellation.deliver_cancellation(team_id, run_id) for team_id, run_id in pending)
+
+    return _summary(len(pending), reconciled)
 
 
-def reconcile_expired_runs() -> int:
-    expired = (
+def reconcile_expired_runs() -> ReconciliationSummary:
+    expired = list(
         WizardRun.objects.unscoped()
         .filter(
             status__in=(WizardRunStatus.CREATED.value, WizardRunStatus.RUNNING.value),
@@ -60,6 +84,7 @@ def reconcile_expired_runs() -> int:
         )
         .values_list("team_id", "id", "workflow_id")[:RECONCILIATION_BATCH_SIZE]
     )
+
     reconciled = 0
     for team_id, run_id, workflow_id in expired:
         try:
@@ -70,11 +95,12 @@ def reconcile_expired_runs() -> int:
         if workflow_id is not None:
             lifecycle.request_cloud_run_cancellation(team_id, run_id)
         reconciled += 1
-    return reconciled
+
+    return _summary(len(expired), reconciled)
 
 
-def reconcile_pending_worker_cleanup() -> int:
-    pending = (
+def reconcile_pending_worker_cleanup() -> ReconciliationSummary:
+    pending = list(
         WizardWorker.objects.unscoped()
         .filter(
             cleanup_status=WizardWorkerCleanupStatus.PENDING.value,
@@ -82,6 +108,7 @@ def reconcile_pending_worker_cleanup() -> int:
         )
         .values_list("team_id", "run_id", "sandbox_id")[:RECONCILIATION_BATCH_SIZE]
     )
+
     reconciled = 0
     for team_id, run_id, sandbox_id in pending:
         if sandbox_id is None:
@@ -92,4 +119,5 @@ def reconcile_pending_worker_cleanup() -> int:
             logger.exception("wizard_worker_reconciliation_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue
         reconciled += 1
-    return reconciled
+
+    return _summary(len(pending), reconciled)

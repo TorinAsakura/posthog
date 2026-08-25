@@ -46,7 +46,12 @@ def test_reconciliation_redispatches_pending_run(team, user) -> None:
     ) as dispatch_wizard_run:
         result = reconciliation.reconcile_pending_dispatches()
 
-    assert result == 1
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=1,
+        failed=0,
+        batch_limit_reached=False,
+    )
     dispatch_wizard_run.assert_called_once_with(team.id, run.id)
 
 
@@ -60,7 +65,12 @@ def test_reconciliation_continues_after_expected_dispatch_failure(team, user) ->
     ):
         result = reconciliation.reconcile_pending_dispatches()
 
-    assert result == 0
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=0,
+        failed=1,
+        batch_limit_reached=False,
+    )
 
 
 @pytest.mark.django_db
@@ -113,7 +123,12 @@ def test_reconciliation_retries_pending_cancellation(team, user) -> None:
     with patch("products.wizard.backend.logic.runs.cancellation.temporal_client.cancel_wizard_run_workflow") as cancel:
         result = reconciliation.reconcile_pending_cancellations()
 
-    assert result == 1
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=1,
+        failed=0,
+        batch_limit_reached=False,
+    )
     cancel.assert_called_once_with(run.id)
     run.refresh_from_db()
     assert run.cancellation_dispatched_at is not None
@@ -125,7 +140,12 @@ def test_reconciliation_fails_expired_run(team, user) -> None:
 
     result = reconciliation.reconcile_expired_runs()
 
-    assert result == 1
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=1,
+        failed=0,
+        batch_limit_reached=False,
+    )
     run.refresh_from_db()
     assert run.status == WizardRunStatus.FAILED.value
     assert run.error_code == WizardRunErrorCode.TIMEOUT.value
@@ -150,7 +170,12 @@ def test_reconciliation_destroys_pending_worker(team, user) -> None:
     ):
         result = reconciliation.reconcile_pending_worker_cleanup()
 
-    assert result == 1
+    assert result == reconciliation.ReconciliationSummary(
+        scanned=1,
+        reconciled=1,
+        failed=0,
+        batch_limit_reached=False,
+    )
     destroy.assert_called_once_with("sandbox-id")
     worker.refresh_from_db()
     assert worker.cleanup_status == WizardWorkerCleanupStatus.CLEANED.value
