@@ -180,6 +180,32 @@ def _cache_url_resolution() -> None:
     resolvers.URLResolver.resolve = resolve  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
 
 
+def _cache_fixture_parent_nodeids() -> None:
+    # FixtureManager._matchfactories rebuilds the set of a node's parent nodeids on every
+    # fixture-name lookup, and collection resolves tens of fixture names per item. A
+    # full-tree Core collection calls it 1.28M times over ~35k distinct nodes, walking the
+    # same short parent chains again and again (8.3M iter_parents steps). A node's parents,
+    # and their nodeids, are fixed once it is constructed, so the set is a pure function of
+    # the node. Node uses __slots__, so key by id() and keep a strong ref to the node, which
+    # both stops id() reuse and matches the node's own session lifetime.
+    from _pytest import fixtures  # noqa: PLC0415 — deferred until pytest_configure
+
+    orig_matchfactories = fixtures.FixtureManager._matchfactories
+    parents: dict = {}
+
+    def _matchfactories(self, fixturedefs, node):
+        entry = parents.get(id(node))
+        if entry is None:
+            entry = parents[id(node)] = (node, {n.nodeid for n in node.iter_parents()})
+        parentnodeids = entry[1]
+        for fixturedef in fixturedefs:
+            if fixturedef.baseid in parentnodeids:
+                yield fixturedef
+
+    _matchfactories.__wrapped__ = orig_matchfactories  # exposes the original for the canary tests
+    fixtures.FixtureManager._matchfactories = _matchfactories  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
+
+
 def _cheapen_freezegun_module_hash() -> None:
     # Every freeze_time().start() revalidates freezegun's per-module patch cache by
     # hashing each loaded module's attribute list: hash(frozenset(dir(module))) across
@@ -206,11 +232,36 @@ def _cheapen_freezegun_module_hash() -> None:
     api._get_module_attributes_hash = _fast_module_attributes_hash  # ty: ignore[invalid-assignment]
 
 
+def _sweep_cyclic_garbage_before_shutdown() -> None:
+    # Frozen objects skip the final cyclic collections of interpreter shutdown, so their
+    # finalizers run in the late teardown phase where extension modules may already be
+    # gone — observed as exit code 139 (SIGSEGV) on the Temporal CI shards. Sweep the heap
+    # here instead, while the extension modules are still loaded, so every finalizer that
+    # shutdown would have run has already run at a point where it is safe.
+    #
+    # Freezing again afterwards is what keeps the session's permanent objects — modules,
+    # classes, pydantic schemas, collected items — out of shutdown's sweeps, which walk
+    # them for ~10s on a full-tree Core collection. Only objects that are still alive here
+    # get frozen, and those were never shutdown's to collect. Anything allocated after this
+    # point stays tracked as usual.
+    gc.unfreeze()
+    gc.collect()
+    gc.freeze()
+
+
 def pytest_configure(config) -> None:
+    # A cleanup rather than a pytest_unconfigure hook because pytest runs every
+    # pytest_unconfigure hook before any cleanup. The unraisableexception plugin's cleanup
+    # runs gc.collect() five times, and thawing the heap first puts the whole session in
+    # front of those sweeps (~8s on a full-tree Core collection). Cleanups pop last in
+    # first out, and this conftest configures before that builtin plugin, so registering
+    # here puts this sweep after them.
+    config.add_cleanup(_sweep_cyclic_garbage_before_shutdown)
     _cache_reverse_rel_identity()
     _cache_select_masks()
     _cache_drf_field_info()
     _cache_url_resolution()
+    _cache_fixture_parent_nodeids()
     _cheapen_freezegun_module_hash()
 
 
@@ -223,14 +274,6 @@ def pytest_runtestloop() -> None:
     # Safety net for processes that never run a local collection (e.g. the
     # pytest-xdist controller): end the window before the test loop starts.
     _end_gc_boot_window()
-
-
-def pytest_unconfigure() -> None:
-    # Frozen objects skip the final cyclic collections of interpreter shutdown, so their
-    # finalizers run in the late teardown phase where extension modules may already be
-    # gone — observed as exit code 139 (SIGSEGV) on the Temporal CI shards. Restore the
-    # default heap state so shutdown behaves exactly as without the boot window.
-    gc.unfreeze()
 
 
 @pytest.fixture(autouse=True)
