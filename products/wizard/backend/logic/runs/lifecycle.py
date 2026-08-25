@@ -183,7 +183,7 @@ def cancel_run(team_id: int, run_id: UUID) -> WizardRunDTO:
 
 def request_cloud_run_cancellation(team_id: int, run_id: UUID) -> None:
     store.mark_cancellation_requested(team_id, run_id)
-    cancellation_service.deliver_cancellation(team_id, run_id)
+    cancellation_service.dispatch_cancellation(team_id, run_id)
 
 
 def update_run_stage(team_id: int, run_id: UUID, stage: WizardRunStage) -> WizardRunDTO:

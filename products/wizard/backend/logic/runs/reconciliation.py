@@ -70,7 +70,7 @@ def reconcile_pending_cancellations() -> ReconciliationSummary:
         .values_list("team_id", "id")[:RECONCILIATION_BATCH_SIZE]
     )
 
-    reconciled = sum(cancellation.deliver_cancellation(team_id, run_id) for team_id, run_id in pending)
+    reconciled = sum(cancellation.dispatch_cancellation(team_id, run_id) for team_id, run_id in pending)
 
     return _summary(len(pending), reconciled)
 
