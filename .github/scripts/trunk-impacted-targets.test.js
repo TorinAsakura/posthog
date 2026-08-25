@@ -117,6 +117,7 @@ const PROTO_CONTEXT = {
             ['personhog-proto', []],
             ['personhog-consumer', ['personhog-proto']],
             ['prometheus-rw-proto', []],
+            ['usage-ingestion-proto', []],
             ['unrelated', []],
         ]),
         byDir: [
@@ -126,6 +127,7 @@ const PROTO_CONTEXT = {
             { dir: 'personhog-proto', name: 'personhog-proto' },
             { dir: 'personhog-consumer', name: 'personhog-consumer' },
             { dir: 'prometheus-rw-proto', name: 'prometheus-rw-proto' },
+            { dir: 'usage-ingestion-proto', name: 'usage-ingestion-proto' },
             { dir: 'unrelated', name: 'unrelated' },
         ],
     },
