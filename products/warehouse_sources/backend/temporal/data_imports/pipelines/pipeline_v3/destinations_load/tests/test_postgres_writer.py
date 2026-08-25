@@ -15,6 +15,7 @@ from products.warehouse_sources.backend.temporal.data_imports.destinations.contr
     DestinationRunContext,
 )
 from products.warehouse_sources.backend.temporal.data_imports.pipelines.pipeline_v3.destinations_load.writers.postgres import (
+    _OWNERSHIP_COMMENT,
     PostgresDestinationWriter,
     UnrelatedTableExistsError,
     staging_table_name,
@@ -439,10 +440,12 @@ class TestMergeConstraints:
             _drop(dsn, table_name)
 
     async def test_a_table_the_customer_already_had_gains_one(self, dsn, table_name) -> None:
-        # Nothing declared a key on this table, so the writer has to add one before it can
-        # merge into it.
+        # This writer created the table on an earlier run, before unique index enforcement
+        # existed, so it carries the ownership comment but no key. Nothing declared a key on
+        # this table, so the writer has to add one before it can merge into it.
         with psycopg.connect(dsn, autocommit=True) as conn:
             conn.execute(f'CREATE TABLE "{table_name}" (id BIGINT, name TEXT)')
+            conn.execute(f"COMMENT ON TABLE \"{table_name}\" IS '{_OWNERSHIP_COMMENT}'")
 
         ctx = _ctx(table_name, "incremental", primary_keys=("id",))
         writer = LocalPostgresWriter(ctx, dsn)
