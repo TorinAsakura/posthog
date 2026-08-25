@@ -102,6 +102,10 @@ class ExecuteWizardRunWorkflow(PostHogWorkflow):
             )
             raise
         except Exception:
+            workflow.logger.exception(
+                "wizard_run_workflow_failed",
+                extra={"team_id": input.team_id, "run_id": str(input.run_id)},
+            )
             await self._destroy_worker(worker)
 
             await self._finalize_run(
