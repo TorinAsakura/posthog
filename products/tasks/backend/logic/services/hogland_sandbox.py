@@ -53,16 +53,16 @@ logger = logging.getLogger(__name__)
 # instead of minting an immortal box.
 HOGLAND_TASKS_BOX_KIND = "agent"
 
-# Every template hogland supports maps to a global snapshot alias baked by
-# `manage.py bake_hogland_snapshot`. Only the plain default-template run is routed
+# Every template hogland supports maps to a global snapshot alias baked in CI
+# (the tasks golden-snapshot workflow). Only the plain default-template run is routed
 # to hogland; anything else stays on Modal (see get_task_processing_context).
 TEMPLATE_TO_SNAPSHOT_ALIAS: dict[SandboxTemplate, str] = {
     SandboxTemplate.DEFAULT_BASE: "alias:posthog-tasks-default",
 }
 
-# The golden snapshot (baked by bake_hogland_snapshot) pins this machine shape. A hogland
+# The golden snapshot (baked in CI) pins this machine shape. A hogland
 # restore must inherit-or-match it, so per-task overrides are ignored and the provisioned
-# box is always this size. Keep in sync with the shape bake_hogland_snapshot boots at.
+# box is always this size. Keep in sync with the shape the CI golden bake boots at.
 HOGLAND_GOLDEN_CPU_CORES = 4.0
 HOGLAND_GOLDEN_MEMORY_GB = 16.0
 HOGLAND_GOLDEN_DISK_GB = 64.0
