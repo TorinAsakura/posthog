@@ -66,6 +66,7 @@ from products.replay_vision.backend.temporal.vision_alerts.constants import (
     MATCH_DESCRIPTOR_MAX_CHARS,
     MATCH_SUMMARY_LINES,
     MAX_ALERTS_PER_BATCH,
+    MAX_DRAIN_ROWS_PER_TICK,
     MAX_MATCHES_PER_BUNDLE,
     NOTIFICATION_FLUSH_TIMEOUT_SECONDS,
 )
@@ -602,10 +603,11 @@ def _drain_matches(inputs: DrainMatchesInput) -> DrainMatchesOutput:
     """
     now = datetime.now(UTC)
     pending_rows: dict[Any, list[tuple[Any, Any]]] = {}
+    # Bounded read: a backlog beyond this drains over later ticks in created_at order.
     for alert_id, row_id, observation_id in (
         VisionAlertMatch.all_teams.filter(delivered_at__isnull=True)
         .order_by("created_at", "id")
-        .values_list("alert_id", "id", "observation_id")
+        .values_list("alert_id", "id", "observation_id")[:MAX_DRAIN_ROWS_PER_TICK]
     ):
         pending_rows.setdefault(alert_id, []).append((row_id, observation_id))
     if not pending_rows:
