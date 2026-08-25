@@ -114,6 +114,34 @@ def _run_context(export_signal: ExportSignalMessage, destination: ExternalDataDe
     )
 
 
+def _fail_for_unresolved_destinations(
+    export_signal: ExportSignalMessage, resolved: list[ExternalDataDestination]
+) -> None:
+    """Raise if a destination from the run's snapshot no longer delivers here.
+
+    The only reason a snapshotted id can be absent from `resolved` is that it is the PostHog
+    warehouse (delivered elsewhere, exempt here) or that it was deleted after the run started.
+    The warehouse case is fine; the deletion case is not — the run's snapshot promised this
+    destination the batch, and `external_destinations_for` silently dropping it would let the
+    final batch mark the run completed while that destination never received its data. Fail
+    the batch instead, the same as any other destination that could not take it.
+    """
+    resolved_ids = {str(d.id) for d in resolved}
+    missing_ids = [
+        destination_id for destination_id in export_signal.destination_ids if destination_id not in resolved_ids
+    ]
+    if not missing_ids:
+        return
+
+    missing = ExternalDataDestination.objects.for_team(export_signal.team_id, canonical=True).filter(id__in=missing_ids)
+    unresolved = [d for d in missing if d.type != ExternalDataDestination.Type.POSTHOG_WAREHOUSE]
+    if not unresolved:
+        return
+
+    names = ", ".join(sorted(d.name for d in unresolved))
+    raise DestinationDeliveryError(names, LookupError("destination deleted after the run started"))
+
+
 def deliver_batch_to_destinations(
     export_signal: ExportSignalMessage,
     destinations: Iterable[ExternalDataDestination] | None = None,
@@ -121,13 +149,20 @@ def deliver_batch_to_destinations(
     """Write this batch to every external destination that has not already taken it.
 
     Returns the number of destinations written. Raises `DestinationDeliveryError` on the
-    first failure, which fails the batch and leaves it to be retried.
+    first failure, which fails the batch and leaves it to be retried. That includes a
+    destination from the run's snapshot that was deleted mid-run: it is reported as failed
+    rather than silently skipped, so the run cannot complete while owing it data.
 
     Connection hygiene belongs to the caller: `close_old_connections` here would drop the
     connection a caller's transaction is running in, which is what the load consumer already
     does once per message before it gets this far.
     """
-    pending = list(destinations if destinations is not None else external_destinations_for(export_signal))
+    if destinations is not None:
+        pending = list(destinations)
+    else:
+        pending = external_destinations_for(export_signal)
+        _fail_for_unresolved_destinations(export_signal, pending)
+
     if not pending:
         return 0
 

@@ -178,12 +178,30 @@ class TestDelivery(DeliveryTestCase):
         assert written == 1
         assert self._writes() == ["warehouse a"]
 
-    def test_a_deleted_destination_is_skipped(self) -> None:
+    def test_a_deleted_destination_fails_the_batch(self) -> None:
         a = self._destination("warehouse a")
         a.deleted = True
         a.save(update_fields=["deleted"])
 
-        assert delivery.deliver_batch_to_destinations(self._signal([str(a.id)])) == 0
+        with self.assertRaises(delivery.DestinationDeliveryError) as caught:
+            delivery.deliver_batch_to_destinations(self._signal([str(a.id)]))
+
+        assert "warehouse a" in str(caught.exception)
+        assert not RecordingWriter.calls
+
+    def test_a_deleted_destination_stops_the_others_from_being_delivered_to_too(self) -> None:
+        a = self._destination("warehouse a")
+        b = self._destination("warehouse b", ExternalDataDestination.Type.SNOWFLAKE)
+        a.deleted = True
+        a.save(update_fields=["deleted"])
+
+        # The batch is not done until every destination in the snapshot has taken it, so a
+        # deleted one blocks the whole batch rather than letting the survivors finish and the
+        # run complete short of what it promised.
+        with self.assertRaises(delivery.DestinationDeliveryError):
+            delivery.deliver_batch_to_destinations(self._signal([str(a.id), str(b.id)]))
+
+        assert not self._writes()
 
 
 class TestWarehousePresence(DeliveryTestCase):
