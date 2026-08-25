@@ -11,10 +11,8 @@ class WizardRunDispatchError(Exception):
     pass
 
 
-# review: name should be more descriptive, like dispatch_wizard_run_to_temporal_worker
-def dispatch_run(team_id: int, run_id: UUID) -> None:
+def dispatch_wizard_run_to_temporal_worker(team_id: int, run_id: UUID) -> None:
     # review: i understand this is done to make sure the run exists, but the logic should be explicit, and implicit in the function call
-    # review: note: this is run in a task, so it kinda makes sense
     run = store.get_run(team_id, run_id)
 
     if run.environment != WizardRunEnvironment.CLOUD or run.status != WizardRunStatus.CREATED:

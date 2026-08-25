@@ -171,7 +171,9 @@ def test_cloud_run_dispatches_after_persistence(team, user) -> None:
             "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
-        patch("products.wizard.backend.logic.runs.lifecycle.enqueue_dispatch") as enqueue_dispatch,
+        patch(
+            "products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker"
+        ) as dispatch_wizard_run,
     ):
         run = wizard_facade.create_run(
             CreateWizardRunInput(
@@ -184,12 +186,12 @@ def test_cloud_run_dispatches_after_persistence(team, user) -> None:
             )
         )
 
-    enqueue_dispatch.assert_called_once_with(team.id, run.id)
+    dispatch_wizard_run.assert_called_once_with(team.id, run.id)
     assert run.status == WizardRunStatus.CREATED
 
 
 @pytest.mark.django_db(transaction=True)
-def test_cloud_run_survives_dispatch_enqueue_failure(team, user) -> None:
+def test_cloud_run_survives_temporal_dispatch_failure(team, user) -> None:
     with (
         patch(
             "products.wizard.backend.logic.runs.repository_access.repo_selection.resolve_team_github_integration_id",
@@ -200,8 +202,8 @@ def test_cloud_run_survives_dispatch_enqueue_failure(team, user) -> None:
             return_value=True,
         ),
         patch(
-            "products.wizard.backend.logic.runs.lifecycle.enqueue_dispatch",
-            side_effect=RuntimeError("Celery unavailable"),
+            "products.wizard.backend.logic.runs.dispatch.temporal_client.start_wizard_run_workflow",
+            side_effect=RuntimeError("Temporal unavailable"),
         ),
     ):
         run = wizard_facade.create_run(
@@ -219,7 +221,8 @@ def test_cloud_run_survives_dispatch_enqueue_failure(team, user) -> None:
     assert run.status == WizardRunStatus.CREATED
     assert run.error_code is None
     assert record.dispatch_status == "pending"
-    assert record.dispatch_attempts == 0
+    assert record.dispatch_attempts == 1
+    assert record.dispatch_error == "Temporal dispatch failed."
 
 
 @pytest.mark.django_db(transaction=True)
@@ -233,7 +236,7 @@ def test_cloud_run_rollback_prevents_dispatch(team, user) -> None:
             "products.wizard.backend.logic.runs.repository_access.repo_selection.repository_accessible_via_integration",
             return_value=True,
         ),
-        patch("products.wizard.backend.logic.runs.lifecycle.enqueue_dispatch") as dispatch,
+        patch("products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker") as dispatch,
         transaction.atomic(),
     ):
         wizard_facade.create_run(
@@ -253,7 +256,7 @@ def test_cloud_run_rollback_prevents_dispatch(team, user) -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_local_run_does_not_dispatch(team, user) -> None:
-    with patch("products.wizard.backend.logic.runs.lifecycle.enqueue_dispatch") as dispatch:
+    with patch("products.wizard.backend.logic.runs.lifecycle.dispatch_wizard_run_to_temporal_worker") as dispatch:
         wizard_facade.create_run(
             CreateWizardRunInput(
                 team_id=team.id,

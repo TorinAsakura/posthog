@@ -10,7 +10,7 @@ from products.wizard.backend.facade.enums import (
 )
 from products.wizard.backend.logic.runs import cancellation, lifecycle, worker_lifecycle
 from products.wizard.backend.logic.runs.config import RECONCILIATION_BATCH_SIZE
-from products.wizard.backend.logic.runs.queue import enqueue_dispatch
+from products.wizard.backend.logic.runs.dispatch import dispatch_wizard_run_to_temporal_worker
 from products.wizard.backend.models import WizardRun, WizardWorker
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def reconcile_pending_dispatches() -> int:
     reconciled = 0
     for team_id, run_id in pending:
         try:
-            enqueue_dispatch(team_id, run_id)
+            dispatch_wizard_run_to_temporal_worker(team_id, run_id)
         except Exception:
             logger.exception("wizard_run_redispatch_failed", extra={"team_id": team_id, "run_id": str(run_id)})
             continue

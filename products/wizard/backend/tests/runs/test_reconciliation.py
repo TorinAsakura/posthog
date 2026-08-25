@@ -36,14 +36,16 @@ def _create_cloud_run(team_id: int, user_id: int, **values: object) -> WizardRun
 
 
 @pytest.mark.django_db
-def test_reconciliation_reenqueues_pending_dispatch(team, user) -> None:
+def test_reconciliation_redispatches_pending_run(team, user) -> None:
     run = _create_cloud_run(team.id, user.id)
 
-    with patch("products.wizard.backend.logic.runs.reconciliation.enqueue_dispatch") as enqueue:
+    with patch(
+        "products.wizard.backend.logic.runs.reconciliation.dispatch_wizard_run_to_temporal_worker"
+    ) as dispatch_wizard_run:
         result = reconciliation.reconcile_pending_dispatches()
 
     assert result == 1
-    enqueue.assert_called_once_with(team.id, run.id)
+    dispatch_wizard_run.assert_called_once_with(team.id, run.id)
 
 
 @pytest.mark.django_db

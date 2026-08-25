@@ -35,8 +35,8 @@ from products.wizard.backend.logic.runs import (
     store,
 )
 from products.wizard.backend.logic.runs.admission import enforce_cloud_run_creation_policy
+from products.wizard.backend.logic.runs.dispatch import dispatch_wizard_run_to_temporal_worker
 from products.wizard.backend.logic.runs.fingerprints import create_run_request_fingerprint
-from products.wizard.backend.logic.runs.queue import enqueue_dispatch
 from products.wizard.backend.logic.runs.repository_access import authorize_git_repository_access
 from products.wizard.backend.logic.runs.transitions import transition
 from products.wizard.backend.observability import service as run_observability
@@ -117,12 +117,9 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
         should_dispatch_wizard_run = is_cloud_run and result.created
 
         if should_dispatch_wizard_run:
-            # ☁️ dispatch point for cloud wizard runs
-            # 1. adds to a celery queue
-            # 2. it runs the temporal workflow
             database_transaction.on_commit(
                 partial(
-                    _enqueue_cloud_run,
+                    _dispatch_cloud_run,
                     params.team_id,
                     result.run.id,
                 ),
@@ -138,14 +135,13 @@ def create_run_with_result(params: CreateWizardRunInput) -> WizardRunCreationRes
     return result
 
 
-def _enqueue_cloud_run(team_id: int, run_id: UUID) -> None:
+def _dispatch_cloud_run(team_id: int, run_id: UUID) -> None:
     try:
-        # enqueues the wizard run dispatch to celery
-        enqueue_dispatch(team_id, run_id)
+        dispatch_wizard_run_to_temporal_worker(team_id, run_id)
 
     except Exception:
         logger.exception(
-            "wizard_run_dispatch_enqueue_failed",
+            "wizard_run_dispatch_failed",
             extra={"team_id": team_id, "run_id": str(run_id)},
         )
 
