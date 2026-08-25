@@ -4602,7 +4602,11 @@ describe("AgentServer HTTP Mode", () => {
           "Generated-By: PostHog Desktop",
           "Task-Id: test-task-id",
         ],
-        shouldNotContain: ["gh repo clone"],
+        shouldNotContain: [
+          "gh repo clone",
+          "query-run",
+          "event-definitions-list",
+        ],
       },
       {
         label: "createPr false",
@@ -4617,6 +4621,8 @@ describe("AgentServer HTTP Mode", () => {
           "open a draft pull request",
           "gh pr create --draft",
           "gh repo clone",
+          "query-run",
+          "event-definitions-list",
         ],
       },
     ])(
