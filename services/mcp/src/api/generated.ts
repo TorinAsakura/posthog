@@ -58963,17 +58963,17 @@ export namespace Schemas {
       metadata?: PatchedDatasetUpdateMetadata;
     }
 
+    export interface PatchedDesignPatch {
+      /** Ordered edits applied atomically to a template's Unlayer design: the stored design is read, the ops are applied in order, the result is validated and re-rendered to HTML, and it's saved only if valid — otherwise the template is unchanged. Reference blocks by id so you never resend the whole design. */
+      operations?: DesignOperation[];
+    }
+
     export interface PatchedDestinationLink {
       /**
          * Destinations to sync to. On a table, null clears the override so the table follows its source again.
          * @nullable
          */
       destination_ids?: string[] | null;
-    }
-
-    export interface PatchedDesignPatch {
-      /** Ordered edits applied atomically to a template's Unlayer design: the stored design is read, the ops are applied in order, the result is validated and re-rendered to HTML, and it's saved only if valid — otherwise the template is unchanged. Reference blocks by id so you never resend the whole design. */
-      operations?: DesignOperation[];
     }
 
     /**
