@@ -22,7 +22,7 @@ from products.dashboards.backend.api.dashboard_templates import (
 )
 from products.dashboards.backend.models.dashboard import Dashboard
 from products.dashboards.backend.models.dashboard_templates import DashboardTemplate
-from products.product_analytics.backend.models.insight import Insight
+from products.product_analytics.backend.facade.models import Insight
 
 from ee.models.rbac.access_control import AccessControl
 
