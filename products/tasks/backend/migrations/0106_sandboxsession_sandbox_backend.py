@@ -2,7 +2,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [("tasks", "0103_callable_choices")]
+    dependencies = [("tasks", "0105_taskrun_webhook_lookup_indexes")]
 
     operations = [
         migrations.AddField(
