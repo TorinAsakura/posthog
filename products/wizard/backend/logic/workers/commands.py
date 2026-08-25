@@ -42,6 +42,14 @@ def build_git_diff_command(repository_path: str) -> str:
     return f"cd {shlex.quote(repository_path)} && git add -N --all && git diff --binary --no-ext-diff HEAD"
 
 
+def wizard_handoff_output_path(run_id: UUID) -> str:
+    return f"/tmp/posthog-wizard-handoff-{run_id.hex}.md"
+
+
+def build_read_handoff_command(run_id: UUID) -> str:
+    return f"cat {shlex.quote(wizard_handoff_output_path(run_id))}"
+
+
 def pull_request_branch(run_id: UUID) -> str:
     return f"posthog/wizard-{run_id.hex[:12]}"
 

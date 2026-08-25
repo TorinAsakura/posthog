@@ -8,6 +8,7 @@ from parameterized import parameterized
 
 from products.tasks.backend.facade.repository import RepositoryPullRequest
 from products.tasks.backend.facade.sandbox import SandboxNotFoundError
+from products.wizard.backend.logic.workers.commands import wizard_handoff_output_path
 from products.wizard.backend.logic.workers.service import (
     GitRepositoryCloneRequest,
     GitRepositoryHandoffRequest,
@@ -52,6 +53,7 @@ def test_provision_worker_configures_wizard_environment(
     assert "GITHUB_TOKEN" not in config.environment_variables
     assert config.environment_variables["POSTHOG_WIZARD_API_KEY"] == "wizard-secret"
     assert "POSTHOG_WIZARD_RUN_ID" not in config.environment_variables
+    assert config.environment_variables["POSTHOG_HANDOFF_OUTPUT_PATH"] == wizard_handoff_output_path(request.run_id)
     assert config.ttl_seconds == 75 * 60
 
 
@@ -195,7 +197,10 @@ def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
         repository="PostHog/PostHog",
     )
     sandbox = get_sandbox_class.return_value.get_by_id.return_value
-    sandbox.execute.return_value = _execution_result(stdout="diff --git a/a b/a\n")
+    sandbox.execute.side_effect = (
+        _execution_result(stdout="diff --git a/a b/a\n"),
+        _execution_result(stdout="# Setup report\n\nAll done.\n"),
+    )
     branch = f"posthog/wizard-{request.run_id.hex[:12]}"
     pull_request = RepositoryPullRequest(
         repository=request.repository,
@@ -210,6 +215,7 @@ def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
 
     assert result == WizardWorkerResult(diff=b"diff --git a/a b/a\n", pull_request=pull_request)
     assert "git add -N --all" in sandbox.execute.call_args_list[0].args[0]
+    assert wizard_handoff_output_path(request.run_id) in sandbox.execute.call_args_list[1].args[0]
     create_signed_commit.assert_called_once_with(
         sandbox,
         repository=request.repository,
@@ -222,8 +228,42 @@ def test_git_repository_handoff_captures_diff_and_publishes_pull_request(
         repository=request.repository,
         head_branch=branch,
         title="Set up PostHog",
-        body="This pull request contains changes created by Wizard, PostHog's setup agent.",
+        body="# Setup report\n\nAll done.",
         source="wizard",
+    )
+
+
+@pytest.mark.parametrize(
+    "handoff_result",
+    (
+        _execution_result(exit_code=1),
+        _execution_result(stdout="  \n"),
+    ),
+)
+@patch("products.wizard.backend.logic.workers.service.repository_facade.create_pull_request")
+@patch("products.wizard.backend.logic.workers.service.repository_facade.create_signed_commit")
+@patch("products.wizard.backend.logic.workers.service.get_sandbox_class")
+def test_git_repository_handoff_uses_generic_body_when_handoff_is_unavailable(
+    get_sandbox_class: MagicMock,
+    create_signed_commit: MagicMock,
+    create_pull_request: MagicMock,
+    handoff_result: SimpleNamespace,
+) -> None:
+    request = GitRepositoryHandoffRequest(
+        team_id=7,
+        run_id=uuid4(),
+        sandbox_id="worker-id",
+        workspace_path="/tmp/workspace/repos/posthog/posthog",
+        github_integration_id=17,
+        repository="PostHog/PostHog",
+    )
+    sandbox = get_sandbox_class.return_value.get_by_id.return_value
+    sandbox.execute.side_effect = (_execution_result(stdout="diff --git a/a b/a\n"), handoff_result)
+
+    create_git_repository_handoff(request)
+
+    assert create_pull_request.call_args.kwargs["body"] == (
+        "This pull request contains changes created by Wizard, PostHog's setup agent."
     )
 
 

@@ -12,6 +12,7 @@ from posthog.temporal.oauth import create_wizard_oauth_access_token_for_user
 from products.tasks.backend.facade import repository as repository_facade
 from products.tasks.backend.facade.repo_selection import get_github_token
 from products.tasks.backend.facade.sandbox import (
+    SandboxBase,
     SandboxConfig,
     SandboxExecutionError,
     SandboxNotFoundError,
@@ -26,8 +27,10 @@ from products.wizard.backend.logic.artifacts.config import (
 )
 from products.wizard.backend.logic.workers.commands import (
     build_git_diff_command,
+    build_read_handoff_command,
     build_wizard_command,
     pull_request_branch,
+    wizard_handoff_output_path,
 )
 from products.wizard.backend.logic.workers.config import (
     SANDBOX_CPU_CORES,
@@ -176,6 +179,7 @@ def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> Wizar
         return WizardWorkerResult(diff=diff, pull_request=None)
 
     branch = pull_request_branch(request.run_id)
+    handoff_body = _read_handoff_body(sandbox, request.run_id) or PULL_REQUEST_BODY
 
     try:
         repository_facade.create_signed_commit(
@@ -191,7 +195,7 @@ def create_git_repository_handoff(request: GitRepositoryHandoffRequest) -> Wizar
             repository=request.repository,
             head_branch=branch,
             title=PULL_REQUEST_TITLE,
-            body=PULL_REQUEST_BODY,
+            body=handoff_body,
             source="wizard",
         )
 
@@ -238,6 +242,15 @@ def _failure_detail(stdout: str, stderr: str) -> str | None:
     return output[-WIZARD_ERROR_DETAIL_LENGTH:] or None
 
 
+def _read_handoff_body(sandbox: SandboxBase, run_id: UUID) -> str | None:
+    handoff_result = sandbox.execute(build_read_handoff_command(run_id), timeout_seconds=10)
+    if handoff_result.exit_code != 0:
+        return None
+
+    handoff_body = handoff_result.stdout.strip()
+    return handoff_body or None
+
+
 def _build_sandbox_config(request: WizardWorkerProvisionRequest, wizard_token: str) -> SandboxConfig:
     return SandboxConfig(
         name=f"wizard-{request.run_id}",
@@ -251,6 +264,7 @@ def _build_sandbox_config(request: WizardWorkerProvisionRequest, wizard_token: s
             "POSTHOG_API_URL": settings.SANDBOX_API_URL or settings.SITE_URL,
             "POSTHOG_PROJECT_ID": str(request.team_id),
             "POSTHOG_WIZARD_API_KEY": wizard_token,
+            "POSTHOG_HANDOFF_OUTPUT_PATH": wizard_handoff_output_path(request.run_id),
         },
         metadata={
             "purpose": "wizard_run",
